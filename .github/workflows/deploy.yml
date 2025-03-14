@@ -15,7 +15,7 @@ jobs:
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
+          ParsePrivateKey: ${{ secrets.VM_SSH_KEY }}
           script: |
             cd DataCycleProject_Grp10\DataCycleProject_Grp10
             git pull origin main
