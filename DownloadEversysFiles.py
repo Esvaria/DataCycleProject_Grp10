@@ -15,8 +15,9 @@ SMB_SHARE = "Eversys"
 SMB_USER = "Student"
 SMB_PASSWORD = "3uw.AQ!SWxsDBm2zi3"
 
-# Local folder to save DAT files
-DAT_FILES_FOLDER = "EversysDatFiles"
+# Local folder to save DAT files (placed one level up from the script directory)
+BASE_DIR = os.path.abspath(os.path.join(os.getcwd(), ".."))
+DAT_FILES_FOLDER = os.path.join(BASE_DIR, "EversysDatFiles")
 os.makedirs(DAT_FILES_FOLDER, exist_ok=True)
 
 # Connect to SMB

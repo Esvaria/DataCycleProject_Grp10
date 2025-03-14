@@ -2,18 +2,23 @@ import os
 import pandas as pd
 from openpyxl import load_workbook
 from io import StringIO
+from shutil import copy2
+from datetime import datetime
 
 # Configuration
-DAT_FILES_FOLDER = "EversysDatFiles"  # Local folder with downloaded DAT files
-LOCAL_CSV = "known_machines.csv"
-OUTPUT_EXCEL_FILE = "Eversys_data.xlsx"
-PROCESSED_FILES_TRACKER = "processed_files.txt"
+BASE_DIR = os.path.abspath(os.path.join(os.getcwd(), ".."))  # Move one level up
+
+DAT_FILES_FOLDER = os.path.join(BASE_DIR, "EversysDatFiles")  # Folder containing DAT files
+BRONZE_FOLDER = os.path.join(BASE_DIR, "BronzeRawData")  # Main storage folder
+
+OUTPUT_EXCEL_FILE = os.path.join(BRONZE_FOLDER, "Eversys_data.xlsx")  # Main Excel file
+PROCESSED_FILES_TRACKER = os.path.join(BRONZE_FOLDER, "processed_files.txt")  # Processed files tracker
+
 EXCEL_MAX_ROWS = 1_048_576
 BATCH_SIZE = 100  # Process files in batches of 100
 
-# Load known machines
-def load_known_machines():
-    return pd.read_csv(LOCAL_CSV, dtype=str)
+# Ensure directories exist
+os.makedirs(BRONZE_FOLDER, exist_ok=True)
 
 # Track processed files
 def load_processed_files():
@@ -54,7 +59,7 @@ def process_file(file_path, filename):
         print(f"Error processing file {filename}: {e}")
         return None, None
 
-# Append data to Excel file (handles max row limits)
+# Append batch to existing Excel file
 def append_to_excel(file_name, data_frames):
     """Append data to an existing Excel file while handling Excel row limits."""
     
@@ -63,24 +68,25 @@ def append_to_excel(file_name, data_frames):
         return
 
     mode = 'a' if os.path.exists(file_name) else 'w'
-    
     writer_args = {"engine": "openpyxl", "mode": mode}
-    
-    # Use "if_sheet_exists" only when appending to an existing file
+
     if mode == 'a':
-        writer_args["if_sheet_exists"] = "overlay"
+        writer_args["if_sheet_exists"] = "replace"
 
     with pd.ExcelWriter(file_name, **writer_args) as writer:
         for sheet_name, dfs in data_frames.items():
             if not dfs:
                 continue
-            
+
             new_data = pd.concat(dfs, ignore_index=True)
+
             try:
+                # Read existing sheet data if appending
                 existing_data = pd.read_excel(file_name, sheet_name=sheet_name, dtype=str)
                 combined_df = pd.concat([existing_data, new_data], ignore_index=True)
             except Exception:
-                combined_df = new_data  # Create a new sheet if missing
+                # Create a new sheet if it does not exist
+                combined_df = new_data  
 
             sheet_count = 1
             while len(combined_df) > 0:
@@ -94,12 +100,28 @@ def append_to_excel(file_name, data_frames):
 
     print(f"Data successfully appended to {file_name}")
 
+# Copy the final Excel file and processed tracker to the history folder
+def save_files_to_history():
+    """Copies the processed Excel file and processed files tracker into a structured year/month/day history folder."""
+    now = datetime.now()
+    history_folder = os.path.join(BRONZE_FOLDER, str(now.year), f"{now.month:02d}", f"{now.day:02d}")
+    
+    # Ensure directory exists
+    os.makedirs(history_folder, exist_ok=True)
+    
+    history_excel = os.path.join(history_folder, "Eversys_data.xlsx")
+    history_tracker = os.path.join(history_folder, "processed_files.txt")
+
+    # Copy files (overwrite if they exist)
+    copy2(OUTPUT_EXCEL_FILE, history_excel)
+    copy2(PROCESSED_FILES_TRACKER, history_tracker)
+
+    print(f"Excel file copied to history: {history_excel}")
+    print(f"Processed files tracker copied to history: {history_tracker}")
 
 # Main process
 def main():
-    known_machines = load_known_machines()
     processed_files = load_processed_files()
-
     all_files = list_local_files()
     new_files = [f for f in all_files if f not in processed_files]
 
@@ -124,8 +146,6 @@ def main():
             if df is None:
                 continue
 
-            df = df.merge(known_machines, on="machine_id", how="left", suffixes=("_original", "_known")) if "machine_id" in df.columns else df
-
             data_frames[sheet_name].append(df)
             successful_files.append(filename)
 
@@ -137,6 +157,7 @@ def main():
 
         batch_count += 1
 
+    save_files_to_history()
     print("Processing complete.")
 
 if __name__ == "__main__":
