@@ -1,6 +1,6 @@
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
 
 jobs:
   deploy:
@@ -10,12 +10,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v3
 
-      - name: Deploy to VM via SSH
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          script: |
-            cd 'C:\Users\Administrator\DataCycleProject_Grp10'
-            git pull origin main
+      - name: Pull latest changes from GitHub
+        run: |
+          cd C:/Users/Administrator/DataCycleProject_Grp10 
+          git pull origin main
