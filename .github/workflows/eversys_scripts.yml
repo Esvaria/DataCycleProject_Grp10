@@ -1,0 +1,20 @@
+name: Execute Eversys Scripts
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"  # Runs every 30 minutes
+  workflow_dispatch:
+
+jobs:
+  run-eversys-scripts:
+    runs-on: [self-hosted]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Run Download Script
+        run: python downloadeversysdata.py
+
+      - name: Run Extract Script
+        run: python extracteversysdata.py
