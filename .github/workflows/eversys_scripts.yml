@@ -2,7 +2,7 @@ name: Execute Eversys Scripts
 
 on:
   schedule:
-   - cron: "*/30 */30 * * *"  # Runs every 30 minutes -- temp: every 30 hours
+    - cron: "*/30 */30 * * *"  # Runs every 30 minutes
   workflow_dispatch:
 
 jobs:
@@ -15,9 +15,12 @@ jobs:
 
       - name: Run Download Script
         run: python downloadeversysfiles.py
+        working-directory: C:\Users\Administrator\DataCycleProject\DataCycleProject_Grp10
 
       - name: Run Extract Script
         run: python extracteversysdata.py
+        working-directory: C:\Users\Administrator\DataCycleProject\DataCycleProject_Grp10
 
-      - name : Run Silver Script
+      - name: Run Silver Script
         run: python silvercleaningscript.py
+        working-directory: C:\Users\Administrator\DataCycleProject\DataCycleProject_Grp10
