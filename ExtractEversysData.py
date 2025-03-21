@@ -1,164 +1,155 @@
 import os
 import pandas as pd
-from openpyxl import load_workbook
 from io import StringIO
-from shutil import copy2
 from datetime import datetime
+from shutil import copy2
 
 # Configuration
 BASE_DIR = os.path.abspath(os.path.join(os.getcwd(), ".."))  # Move one level up
+DAT_FILES_FOLDER = os.path.join(BASE_DIR, "EversysDatFiles")  # Folder containing raw .dat files
+OUTPUT_FOLDER = os.path.join(BASE_DIR, "BronzeRawData")  # Final output folder for merged .dat files
+TEMP_FOLDER = os.path.join(BASE_DIR, "TempDatFiles")  # Temporary folder to process files safely
+PROCESSED_FILES_TRACKER = os.path.join(BASE_DIR, "processed_files.txt")  # Processed files tracker
 
-DAT_FILES_FOLDER = os.path.join(BASE_DIR, "EversysDatFiles")  # Folder containing DAT files
-BRONZE_FOLDER = os.path.join(BASE_DIR, "BronzeRawData")  # Main storage folder
+# Ensure necessary directories exist
+os.makedirs(TEMP_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-OUTPUT_EXCEL_FILE = os.path.join(BRONZE_FOLDER, "Eversys_data.xlsx")  # Main Excel file
-PROCESSED_FILES_TRACKER = os.path.join(BRONZE_FOLDER, "processed_files.txt")  # Processed files tracker
+# File Type Mapping & Folder Structure
+FILE_MAPPING = {
+    "Cleaning_History": "Cleaning",
+    "Rinse_History": "Rinse",
+    "Info_Message_History": "Info",
+    "Product_History": "Product"
+}
 
-EXCEL_MAX_ROWS = 1_048_576
-BATCH_SIZE = 100  # Process files in batches of 100
-
-# Ensure directories exist
-os.makedirs(BRONZE_FOLDER, exist_ok=True)
-
-# Track processed files
+# Load processed files (ensure file exists)
 def load_processed_files():
-    if os.path.exists(PROCESSED_FILES_TRACKER):
-        with open(PROCESSED_FILES_TRACKER, "r") as f:
-            return set(f.read().splitlines())
-    return set()
+    if not os.path.exists(PROCESSED_FILES_TRACKER):
+        with open(PROCESSED_FILES_TRACKER, "w"):  # Create the file if missing
+            pass
+    with open(PROCESSED_FILES_TRACKER, "r") as f:
+        return set(f.read().splitlines())
 
+# Save a processed file immediately
 def save_processed_file(filename):
     with open(PROCESSED_FILES_TRACKER, "a") as f:
         f.write(f"{filename}\n")
 
-# List DAT files in local folder
+# List all DAT files in the folder
 def list_local_files():
+    if not os.path.exists(DAT_FILES_FOLDER):  # Check if folder exists
+        print(f"The folder '{DAT_FILES_FOLDER}' does not exist. Exiting process.")
+        return []  # Return empty list, preventing errors
     return [f for f in os.listdir(DAT_FILES_FOLDER) if f.endswith(".dat")]
 
-# Process DAT file (No Filtering)
-def process_file(file_path, filename):
-    file_mapping = {
-        "Cleaning_History": "Cleaning",
-        "Rinse_History": "Rinse",
-        "Info_Message_History": "Info msg",
-        "Product_History": "Product"
-    }
-
-    file_type = filename.split("-")[-1].replace(".dat", "").replace(".DAT", "")
-    sheet_name = file_mapping.get(file_type, file_type)
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        df = pd.read_csv(StringIO(content), delimiter=';', dtype=str)
-        df["file_type"] = sheet_name  # Add a column for file type
-
-        return df if not df.empty else None, sheet_name
-    except Exception as e:
-        print(f"Error processing file {filename}: {e}")
-        return None, None
-
-# Append batch to existing Excel file
-def append_to_excel(file_name, data_frames):
-    """Append data to an existing Excel file while handling Excel row limits."""
-    
-    if all(len(df) == 0 for df_list in data_frames.values() for df in df_list):
-        print("No valid data to save. Skipping Excel write.")
-        return
-
-    mode = 'a' if os.path.exists(file_name) else 'w'
-    writer_args = {"engine": "openpyxl", "mode": mode}
-
-    if mode == 'a':
-        writer_args["if_sheet_exists"] = "replace"
-
-    with pd.ExcelWriter(file_name, **writer_args) as writer:
-        for sheet_name, dfs in data_frames.items():
-            if not dfs:
-                continue
-
-            new_data = pd.concat(dfs, ignore_index=True)
-
-            try:
-                # Read existing sheet data if appending
-                existing_data = pd.read_excel(file_name, sheet_name=sheet_name, dtype=str)
-                combined_df = pd.concat([existing_data, new_data], ignore_index=True)
-            except Exception:
-                # Create a new sheet if it does not exist
-                combined_df = new_data  
-
-            sheet_count = 1
-            while len(combined_df) > 0:
-                sheet_chunk = combined_df.iloc[:EXCEL_MAX_ROWS]
-                combined_df = combined_df.iloc[EXCEL_MAX_ROWS:]
-
-                sheet_name_chunk = f"{sheet_name}_{sheet_count}" if sheet_count > 1 else sheet_name
-                sheet_chunk.to_excel(writer, sheet_name=sheet_name_chunk, index=False)
-
-                sheet_count += 1
-
-    print(f"Data successfully appended to {file_name}")
-
-# Copy the final Excel file and processed tracker to the history folder
-def save_files_to_history():
-    """Copies the processed Excel file and processed files tracker into a structured year/month/day history folder."""
+# Create a backup copy in history folder (year/month/day/)
+def backup_file(source_path, category_folder):
     now = datetime.now()
-    history_folder = os.path.join(BRONZE_FOLDER, str(now.year), f"{now.month:02d}", f"{now.day:02d}")
+    history_folder = os.path.join(category_folder, str(now.year), f"{now.month:02d}", f"{now.day:02d}")
+
+    os.makedirs(history_folder, exist_ok=True)  # Ensure history directory exists
+    backup_path = os.path.join(history_folder, os.path.basename(source_path))
     
-    # Ensure directory exists
-    os.makedirs(history_folder, exist_ok=True)
-    
-    history_excel = os.path.join(history_folder, "Eversys_data.xlsx")
-    history_tracker = os.path.join(history_folder, "processed_files.txt")
+    copy2(source_path, backup_path)  # Copy file for historization
+    print(f"Backup created: {backup_path}")
 
-    # Copy files (overwrite if they exist)
-    copy2(OUTPUT_EXCEL_FILE, history_excel)
-    copy2(PROCESSED_FILES_TRACKER, history_tracker)
+# Process and temporarily store each file
+def process_files(files, processed_files):
+    for filename in files:
+        if filename in processed_files:  # Ensure we don't reprocess already saved files
+            continue
 
-    print(f"Excel file copied to history: {history_excel}")
-    print(f"Processed files tracker copied to history: {history_tracker}")
+        file_path = os.path.join(DAT_FILES_FOLDER, filename)
+        file_type = filename.split("-")[-1].replace(".dat", "").replace(".DAT", "")
+        category = FILE_MAPPING.get(file_type)
 
-# Main process
-def main():
-    processed_files = load_processed_files()
-    all_files = list_local_files()
-    new_files = [f for f in all_files if f not in processed_files]
+        if not category:
+            continue  # Skip unrecognized files
 
-    if not new_files:
-        print("No new files to process.")
-        return
+        # Define paths
+        category_folder = os.path.join(OUTPUT_FOLDER, category)
+        current_folder = os.path.join(category_folder, "current")
+        temp_path = os.path.join(TEMP_FOLDER, filename)  # Temp file path
+        output_path = os.path.join(current_folder, f"{category}.dat")  # Final .dat file
 
-    print(f"Found {len(new_files)} new DAT files to process.")
+        os.makedirs(current_folder, exist_ok=True)  # Ensure category and current folder exist
 
-    batch_count = 0
+        is_new_file = not os.path.exists(output_path)
 
-    while batch_count * BATCH_SIZE < len(new_files):
-        batch_files = new_files[batch_count * BATCH_SIZE:(batch_count + 1) * BATCH_SIZE]
-        print(f"Processing batch {batch_count + 1}: {len(batch_files)} files")
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
 
-        data_frames = {name: [] for name in ["Cleaning", "Rinse", "Info msg", "Product"]}
-        successful_files = []
+            df = pd.read_csv(StringIO(content), delimiter=';', dtype=str)
 
-        for filename in batch_files:
-            file_path = os.path.join(DAT_FILES_FOLDER, filename)
-            df, sheet_name = process_file(file_path, filename)
-            if df is None:
+            if df.empty:
+                print(f"Skipping empty file: {filename}")
                 continue
 
-            data_frames[sheet_name].append(df)
-            successful_files.append(filename)
+            # Write fully processed data to the temp folder first
+            with open(temp_path, "w", encoding="utf-8") as f_temp:
+                df.to_csv(f_temp, sep=';', index=False, header=is_new_file)
 
-        append_to_excel(OUTPUT_EXCEL_FILE, data_frames)
-        print(f"Batch {batch_count + 1} appended to {OUTPUT_EXCEL_FILE}")
+            # Move the fully processed file to the final location
+            with open(temp_path, "r", encoding="utf-8") as f_temp, open(output_path, "a", encoding="utf-8") as f_out:
+                if not is_new_file:  # Skip header if appending to an existing file
+                    next(f_temp)
+                for line in f_temp:
+                    f_out.write(line)
 
-        for filename in batch_files:
+            # Remove the temporary file after successful processing
+            os.remove(temp_path)
+
+            print(f"Merged {filename} into {output_path}")
+
+            #  Backup before marking as processed
+            backup_file(output_path, category_folder)
+
+            #  IMMEDIATELY mark file as processed
             save_processed_file(filename)
 
-        batch_count += 1
+        except Exception as e:
+            print(f"Error processing file {filename}: {e}")
+            if os.path.exists(temp_path):
+                os.remove(temp_path)  # Cleanup temp file on failure
 
-    save_files_to_history()
-    print("Processing complete.")
+# Ensure that at least one file exists in each "current" folder
+def ensure_current_files():
+    for category in FILE_MAPPING.values():
+        category_folder = os.path.join(OUTPUT_FOLDER, category)
+        current_folder = os.path.join(category_folder, "current")
+        output_path = os.path.join(current_folder, f"{category}.dat")
+
+        os.makedirs(current_folder, exist_ok=True)  # Ensure the "current" folder exists
+
+        if not os.path.exists(output_path):  # If no file exists, create an empty one
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write("")  # Create an empty .dat file
+
+            print(f"Created empty placeholder file: {output_path}")
+
+        # Always create a backup even if no new files were processed
+        backup_file(output_path, category_folder)
+
+# Main function
+def main():
+    if not os.path.exists(DAT_FILES_FOLDER):
+        print(f"The folder '{DAT_FILES_FOLDER}' does not exist. Exiting process.")
+        return
+
+    processed_files = load_processed_files()
+    all_files = list_local_files()
+    new_files = [f for f in all_files if f not in processed_files]  # Only process untracked files
+
+    if new_files:
+        print(f"Found {len(new_files)} new DAT files to process.")
+        process_files(new_files, processed_files)
+        print("Processing complete.")
+    else:
+        print("🔹 No new files to process.")
+
+    ensure_current_files()
 
 if __name__ == "__main__":
     print("Starting new execution cycle...")
