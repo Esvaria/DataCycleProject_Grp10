@@ -1,4 +1,5 @@
 import os
+import csv
 import pandas as pd
 from datetime import datetime
 import hashlib
@@ -12,39 +13,35 @@ SILVER_BASE = os.path.join(BASE_DIR, "SilverRawData", "Cleaning")
 SILVER_CURRENT = os.path.join(SILVER_BASE, "current")
 SILVER_HISTORY = os.path.join(SILVER_BASE, datetime.now().strftime("%Y/%m/%d"))
 
-FILENAME_OUT = "cleaned_Cleaning.dat"
+FILENAME_OUT = "Silver_Cleaning.dat"
 OUTPUT_FILE = os.path.join(SILVER_CURRENT, FILENAME_OUT)
 OUTPUT_FILE_HIST = os.path.join(SILVER_HISTORY, FILENAME_OUT)
 
 PROCESSED_LINES_TRACKER = os.path.join(BASE_DIR, "BronzeRawData", "Cleaning", "current", "cleaned_lines.txt")
 
 # === HELPERS ===
-
 def hash_line(line):
     return hashlib.md5(line.encode("utf-8")).hexdigest()
 
 def clean_value(val):
-    return val.replace('\n', '').replace('\r', '').strip().strip('"').strip("'")
+    if not isinstance(val, str):
+        val = str(val)
+    return val.replace("\n", "").replace("\r", "").replace('"', "").replace("'", "").strip()
 
 def parse_two_values(val, col_name):
     val = clean_value(val)
     if val == "":
         return None, None
     parts = val.split(";")
-    if len(parts) == 2:
-        try:
-            return int(float(parts[0].strip())), int(float(parts[1].strip()))
-        except:
-            print(f"Warning: Invalid number(s) in column '{col_name}' -> {val}")
-            return None, None
-    elif len(parts) == 1:
-        try:
-            return int(float(parts[0].strip())), None
-        except:
-            print(f"Warning: Invalid single value in column '{col_name}' -> {val}")
-            return None, None
-    else:
-        print(f"Warning: Invalid format in column '{col_name}' -> {val}")
+    if len(parts) != 2:
+        print(f"Warning: Invalid format in column '{col_name}' (expected 'X;Y') -> {val}")
+        return None, None
+    try:
+        part1 = int(float(parts[0].strip()))
+        part2 = int(float(parts[1].strip()))
+        return part1, part2
+    except Exception:
+        print(f"Warning: Invalid number(s) in column '{col_name}' -> {val}")
         return None, None
 
 def validate_int(val, min_val, max_val, col_name):
@@ -84,7 +81,6 @@ def format_date(val, col_name):
             return None
 
 # === MAIN PROCESS ===
-
 def main():
     if not os.path.exists(INPUT_FILE):
         print(f"Input file not found: {INPUT_FILE}")
@@ -95,66 +91,52 @@ def main():
         with open(PROCESSED_LINES_TRACKER, "r") as f:
             processed_hashes = set(f.read().splitlines())
 
-    with open(INPUT_FILE, "r", encoding="utf-8") as f:
-        raw_lines = [line.strip() for line in f if line.strip()]
-
-    if not raw_lines:
-        print("Input file is empty or only contains blank lines.")
-        return
-
-    header = raw_lines[0].split(";")
-    data_lines = raw_lines[1:]
-
     cleaned_rows = []
     new_hashes = []
 
-    for line in data_lines:
-        line_hash = hash_line(line)
-        if line_hash in processed_hashes:
-            continue
+    with open(INPUT_FILE, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f, delimiter=";", quotechar='"')
+        for row in reader:
+            line = ";".join([row[h] for h in reader.fieldnames if h in row])
+            line_hash = hash_line(line)
+            if line_hash in processed_hashes:
+                continue
 
-        parts = line.split(";")
-        if len(parts) < len(header):
-            print(f"Warning: Line skipped due to missing fields -> {line}")
-            continue
+            ts = format_date(row["timestamp_start"], "timestamp_start")
+            te = format_date(row["timestamp_end"], "timestamp_end")
 
-        row = dict(zip(header, parts))
+            cleaned = {
+                "machine_id": clean_value(row["machine_id"]),
+                "timestamp_start": ts.strftime("%Y-%m-%d %H:%M:%S") if ts else "",
+                "timestamp_end": te.strftime("%Y-%m-%d %H:%M:%S") if te else "",
+                "powder_clean_status": validate_int(row["powder_clean_status"], 0, 4, "powder_clean_status"),
+                "tabs_status_left": validate_int(row["tabs_status_left"], 0, 7, "tabs_status_left"),
+                "tabs_status_right": validate_int(row["tabs_status_right"], 0, 7, "tabs_status_right"),
+                "detergent_status_left": validate_int(row["detergent_status_left"], 0, 9, "detergent_status_left"),
+                "detergent_status_right": validate_int(row["detergent_status_right"], 0, 9, "detergent_status_right"),
+                "milk_pump_error_left": validate_binary(row["milk_pump_error_left"], "milk_pump_error_left"),
+                "milk_pump_error_right": validate_binary(row["milk_pump_error_right"], "milk_pump_error_right"),
+                "milk_temp_left_1": validate_number(row["milk_temp_left_1"], "milk_temp_left_1"),
+                "milk_temp_left_2": validate_number(row["milk_temp_left_2"], "milk_temp_left_2"),
+                "milk_temp_right_1": validate_number(row["milk_temp_right_1"], "milk_temp_right_1"),
+                "milk_temp_right_2": validate_number(row["milk_temp_right_2"], "milk_temp_right_2"),
+                "milk_rpm_left_1": validate_number(row["milk_rpm_left_1"], "milk_rpm_left_1"),
+                "milk_rpm_left_2": validate_number(row["milk_rpm_left_2"], "milk_rpm_left_2"),
+                "milk_rpm_right_1": validate_number(row["milk_rpm_right_1"], "milk_rpm_right_1"),
+                "milk_rpm_right_2": validate_number(row["milk_rpm_right_2"], "milk_rpm_right_2"),
+            }
 
-        ts = format_date(row["timestamp_start"], "timestamp_start")
-        te = format_date(row["timestamp_end"], "timestamp_end")
+            for col in [
+                "milk_clean_temp_left", "milk_clean_temp_right",
+                "milk_clean_rpm_left", "milk_clean_rpm_right",
+                "milk_seq_cycle_left", "milk_seq_cycle_right"
+            ]:
+                v1, v2 = parse_two_values(row[col], col)
+                cleaned[f"{col}_1"] = v1
+                cleaned[f"{col}_2"] = v2
 
-        cleaned = {
-            "machine_id": clean_value(row["machine_id"]),
-            "timestamp_start": ts.strftime("%Y-%m-%d %H:%M:%S") if ts else "",
-            "timestamp_end": te.strftime("%Y-%m-%d %H:%M:%S") if te else "",
-            "powder_clean_status": validate_int(row["powder_clean_status"], 0, 4, "powder_clean_status"),
-            "tabs_status_left": validate_int(row["tabs_status_left"], 0, 7, "tabs_status_left"),
-            "tabs_status_right": validate_int(row["tabs_status_right"], 0, 7, "tabs_status_right"),
-            "detergent_status_left": validate_int(row["detergent_status_left"], 0, 9, "detergent_status_left"),
-            "detergent_status_right": validate_int(row["detergent_status_right"], 0, 9, "detergent_status_right"),
-            "milk_pump_error_left": validate_binary(row["milk_pump_error_left"], "milk_pump_error_left"),
-            "milk_pump_error_right": validate_binary(row["milk_pump_error_right"], "milk_pump_error_right"),
-            "milk_temp_left_1": validate_number(row["milk_temp_left_1"], "milk_temp_left_1"),
-            "milk_temp_left_2": validate_number(row["milk_temp_left_2"], "milk_temp_left_2"),
-            "milk_temp_right_1": validate_number(row["milk_temp_right_1"], "milk_temp_right_1"),
-            "milk_temp_right_2": validate_number(row["milk_temp_right_2"], "milk_temp_right_2"),
-            "milk_rpm_left_1": validate_number(row["milk_rpm_left_1"], "milk_rpm_left_1"),
-            "milk_rpm_left_2": validate_number(row["milk_rpm_left_2"], "milk_rpm_left_2"),
-            "milk_rpm_right_1": validate_number(row["milk_rpm_right_1"], "milk_rpm_right_1"),
-            "milk_rpm_right_2": validate_number(row["milk_rpm_right_2"], "milk_rpm_right_2"),
-        }
-
-        for col in [
-            "milk_clean_temp_left", "milk_clean_temp_right",
-            "milk_clean_rpm_left", "milk_clean_rpm_right",
-            "milk_seq_cycle_left", "milk_seq_cycle_right"
-        ]:
-            v1, v2 = parse_two_values(row[col], col)
-            cleaned[f"{col}_1"] = v1
-            cleaned[f"{col}_2"] = v2
-
-        cleaned_rows.append(cleaned)
-        new_hashes.append(line_hash)
+            cleaned_rows.append(cleaned)
+            new_hashes.append(line_hash)
 
     if cleaned_rows:
         df = pd.DataFrame(cleaned_rows)
