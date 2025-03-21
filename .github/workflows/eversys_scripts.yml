@@ -18,3 +18,6 @@ jobs:
 
       - name: Run Extract Script
         run: python extracteversysdata.py
+
+      - name : Run Silver Script
+        run: python silvercleaningscript.py
