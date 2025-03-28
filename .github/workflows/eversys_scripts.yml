@@ -21,6 +21,18 @@ jobs:
         run: python extracteversysdata.py
         working-directory: C:\Users\Administrator\DataCycleProject\DataCycleProject_Grp10
 
-      - name: Run Silver Script
+      - name: Run Silver Clean Script
         run: python silvercleaningscript.py
+        working-directory: C:\Users\Administrator\DataCycleProject\DataCycleProject_Grp10
+
+      - name: Run Silver Info Script
+        run: python silverinfoscript.py
+        working-directory: C:\Users\Administrator\DataCycleProject\DataCycleProject_Grp10
+
+      - name: Run Silver Rinse Script
+        run: python silverrinsescript.py
+        working-directory: C:\Users\Administrator\DataCycleProject\DataCycleProject_Grp10
+
+      - name: Run Silver Product Script
+        run: python silverproductscript.py
         working-directory: C:\Users\Administrator\DataCycleProject\DataCycleProject_Grp10
