@@ -27,12 +27,22 @@ def clean_value(val):
         val = str(val)
     return val.replace("\n", "").replace("\r", "").replace('"', "").replace("'", "").strip()
 
+def validate_smallint(val, col_name):
+    try:
+        val = int(clean_value(val))
+        if -32768 <= val <= 32767:
+            return val
+        print(f"Warning: {col_name} out of smallint range -> {val}")
+    except:
+        if str(val).strip():
+            print(f"Warning: Invalid smallint in {col_name} -> {val}")
+    return None
+
 def validate_int(val, col_name):
     try:
-        val = clean_value(val)
-        return int(val)
+        return int(clean_value(val))
     except:
-        if val.strip() != "":
+        if str(val).strip():
             print(f"Warning: Invalid int in {col_name} -> {val}")
         return None
 
@@ -44,7 +54,7 @@ def format_date(val, col_name):
         try:
             return datetime.strptime(val, "%m/%d/%Y %H:%M:%S")
         except:
-            if val.strip() != "":
+            if val.strip():
                 print(f"Warning: Invalid datetime in {col_name} -> {val}")
             return None
 
@@ -84,10 +94,14 @@ def main():
 
         row = dict(zip(header, parts))
 
+        machine_id = validate_smallint(row.get("machine_id", ""), "machine_id")
+        if machine_id is None:
+            continue  # Skip if invalid machine_id
+
         ts = format_date(row["timestamp"], "timestamp")
 
         cleaned = {
-            "machine_id": clean_value(row["machine_id"]),
+            "machine_id": machine_id,
             "timestamp": ts.strftime("%Y-%m-%d %H:%M:%S") if ts else "",
             "number": clean_value(row["number"]),
             "typography": clean_value(row["typography"]),
@@ -106,10 +120,10 @@ def main():
         for col in df.columns:
             df[col] = df[col].apply(lambda x: "" if pd.isna(x) else str(x))
 
-        # Load previous file if it exists
         if os.path.exists(OUTPUT_FILE):
             df_existing = pd.read_csv(OUTPUT_FILE, sep=";", dtype=str)
             df = pd.concat([df_existing, df], ignore_index=True)
+
         df.to_csv(OUTPUT_FILE, sep=";", index=False, encoding="utf-8", lineterminator="\n")
         copy2(OUTPUT_FILE, OUTPUT_FILE_HIST)
 
