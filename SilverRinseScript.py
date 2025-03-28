@@ -19,7 +19,6 @@ OUTPUT_FILE_HIST = os.path.join(SILVER_HISTORY, FILENAME_OUT)
 PROCESSED_LINES_TRACKER = os.path.join(BASE_DIR, "BronzeRawData", "Rinse", "current", "cleaned_lines.txt")
 
 # === HELPERS ===
-
 def hash_line(line):
     return hashlib.md5(line.encode("utf-8")).hexdigest()
 
@@ -38,6 +37,17 @@ def validate_int(val, min_val, max_val, col_name):
     except:
         if str(val).strip() != "":
             print(f"Warning: Invalid value in {col_name} -> {val}")
+    return None
+
+def validate_machine_id(val):
+    try:
+        v = int(val)
+        if 0 <= v <= 32767:
+            return v
+        else:
+            print(f"Skipping line due to invalid machine_id: {val}")
+    except:
+        print(f"Skipping line due to invalid machine_id: {val}")
     return None
 
 def validate_nullable(val, null_marker, col_name):
@@ -63,7 +73,6 @@ def format_date(val, col_name):
             return None
 
 # === MAIN PROCESS ===
-
 def main():
     if not os.path.exists(INPUT_FILE):
         print(f"Input file not found: {INPUT_FILE}")
@@ -99,10 +108,14 @@ def main():
 
         row = dict(zip(header, parts))
 
+        machine_id = validate_machine_id(row["machine_id"])
+        if machine_id is None:
+            continue
+
         ts = format_date(row["timestamp"], "timestamp")
 
         cleaned = {
-            "machine_id": clean_value(row["machine_id"]),
+            "machine_id": machine_id,
             "timestamp": ts.strftime("%Y-%m-%d %H:%M:%S") if ts else "",
             "rinse_type": validate_int(row["rinse_type"], 0, 255, "rinse_type"),
             "flow_rate_left": validate_nullable(row["flow_rate_left"], 65535, "flow_rate_left"),
@@ -126,12 +139,12 @@ def main():
         os.makedirs(SILVER_HISTORY, exist_ok=True)
 
         for col in df.columns:
-            df[col] = df[col].apply(lambda x: "" if pd.isna(x) else str(int(x)) if isinstance(x, (int, float)) and float(x).is_integer() else str(x))
+            df[col] = df[col].apply(lambda x: "" if pd.isna(x) else str(x))
 
-        # Load previous file if it exists
         if os.path.exists(OUTPUT_FILE):
             df_existing = pd.read_csv(OUTPUT_FILE, sep=";", dtype=str)
             df = pd.concat([df_existing, df], ignore_index=True)
+
         df.to_csv(OUTPUT_FILE, sep=";", index=False, encoding="utf-8", lineterminator="\n")
         copy2(OUTPUT_FILE, OUTPUT_FILE_HIST)
 
