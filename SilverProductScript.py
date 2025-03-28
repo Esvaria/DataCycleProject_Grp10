@@ -124,6 +124,10 @@ def main():
         os.makedirs(SILVER_CURRENT, exist_ok=True)
         os.makedirs(SILVER_HISTORY, exist_ok=True)
 
+        # Load previous file if it exists
+        if os.path.exists(OUTPUT_FILE):
+            df_existing = pd.read_csv(OUTPUT_FILE, sep=";", dtype=str)
+            df = pd.concat([df_existing, df], ignore_index=True)
         df.to_csv(OUTPUT_FILE, sep=";", index=False, encoding="utf-8", lineterminator="\n")
         copy2(OUTPUT_FILE, OUTPUT_FILE_HIST)
 

@@ -106,6 +106,10 @@ def main():
         for col in df.columns:
             df[col] = df[col].apply(lambda x: "" if pd.isna(x) else str(x))
 
+        # Load previous file if it exists
+        if os.path.exists(OUTPUT_FILE):
+            df_existing = pd.read_csv(OUTPUT_FILE, sep=";", dtype=str)
+            df = pd.concat([df_existing, df], ignore_index=True)
         df.to_csv(OUTPUT_FILE, sep=";", index=False, encoding="utf-8", lineterminator="\n")
         copy2(OUTPUT_FILE, OUTPUT_FILE_HIST)
 
