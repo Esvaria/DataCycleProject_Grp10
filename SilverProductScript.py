@@ -38,8 +38,13 @@ def validate_float(val, col_name):
 
 def validate_int(val, col_name):
     try:
-        val = clean_value(val)
-        return int(float(val))
+        val = clean_value(val).lower()
+        if val == "true":
+            return 1
+        if val == "false":
+            return 0
+        val = int(float(val))
+        return val
     except:
         if val.strip() != "":
             print(f"Warning: Invalid int in {col_name} -> {val}")
