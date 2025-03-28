@@ -96,10 +96,16 @@ def main():
             continue
 
         row = dict(zip(header, parts))
+
+        machine_id = validate_int(row["machine_id"], "machine_id")
+        if machine_id is None or not (0 <= machine_id <= 32767):
+            print(f"Skipping line due to invalid machine_id -> {row['machine_id']}")
+            continue
+
         ts = format_date(row["timestamp"], "timestamp")
 
         cleaned = {
-            "machine_id": validate_int(row["machine_id"], "machine_id"),
+            "machine_id": machine_id,
             "timestamp": ts.strftime("%Y-%m-%d %H:%M:%S") if ts else "",
             "press_before": validate_float(row["press_before"], "press_before"),
             "press_after": validate_float(row["press_after"], "press_after"),
@@ -129,10 +135,10 @@ def main():
         os.makedirs(SILVER_CURRENT, exist_ok=True)
         os.makedirs(SILVER_HISTORY, exist_ok=True)
 
-        # Load previous file if it exists
         if os.path.exists(OUTPUT_FILE):
             df_existing = pd.read_csv(OUTPUT_FILE, sep=";", dtype=str)
             df = pd.concat([df_existing, df], ignore_index=True)
+
         df.to_csv(OUTPUT_FILE, sep=";", index=False, encoding="utf-8", lineterminator="\n")
         copy2(OUTPUT_FILE, OUTPUT_FILE_HIST)
 

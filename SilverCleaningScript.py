@@ -80,6 +80,13 @@ def format_date(val, col_name):
                 print(f"Warning: Invalid datetime in {col_name} -> {val}")
             return None
 
+def is_valid_machine_id(val):
+    try:
+        val = clean_value(val)
+        return 0 <= int(val) <= 32767
+    except:
+        return False
+
 # === MAIN PROCESS ===
 def main():
     if not os.path.exists(INPUT_FILE):
@@ -97,6 +104,9 @@ def main():
     with open(INPUT_FILE, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter=";", quotechar='"')
         for row in reader:
+            if not is_valid_machine_id(row.get("machine_id", "")):
+                continue
+
             line = ";".join([row[h] for h in reader.fieldnames if h in row])
             line_hash = hash_line(line)
             if line_hash in processed_hashes:
@@ -147,7 +157,6 @@ def main():
         for col in df.columns:
             df[col] = df[col].apply(lambda x: "" if pd.isna(x) else str(int(x)) if isinstance(x, (int, float)) and float(x).is_integer() else str(x))
 
-        # Load previous file if it exists
         if os.path.exists(OUTPUT_FILE):
             df_existing = pd.read_csv(OUTPUT_FILE, sep=";", dtype=str)
             df = pd.concat([df_existing, df], ignore_index=True)
