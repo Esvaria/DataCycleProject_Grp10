@@ -169,12 +169,10 @@ The system applies specific validation rules for each data type:
 
 ## Running the Pipeline
 
-The scripts appear to be designed to run in sequence:
-
 1. Run `bronze_processor.py` to consolidate raw data files
 2. Run each silver processing script to clean respective data categories
 
-These may be executed on a schedule via GitHub Actions or other CI/CD systems.
+These are executed on a schedule via GitHub Actions. 
 
 ## Database Integration
 
