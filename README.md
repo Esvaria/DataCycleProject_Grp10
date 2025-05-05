@@ -192,7 +192,7 @@ The loading procedures for these destinations are not included in the provided s
 
 
 --- TODO
-+ add database tables and relationships
-+ add knime workflow
-+ mention database backups
-+ mention mssql jobs and stocked procedures
++ add database schema link here (image)
++ add knime workflow (francesco)
++ mention database backups (backup and document here)
++ mention mssql jobs and stocked procedures (backup and document here)
