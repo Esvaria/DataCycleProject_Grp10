@@ -7,8 +7,13 @@ This document contains the SQL scripts for all stored procedures used in the mac
 ```sql
 USE [machine_data]
 GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 
-CREATE PROCEDURE [dbo].[sp_ImportCleaningLogs]
+-- Updated Cleaning Logs Import Procedure with Fixed Parsing
+ALTER PROCEDURE [dbo].[sp_ImportCleaningLogs]
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -153,290 +158,7 @@ BEGIN
                 
                 -- Assign the field to the correct variable based on its position
                 IF @FieldNum = 1 SET @MachineId = TRY_CAST(@Field AS INT);
-                ELSE IF @FieldNum = 2 SET @Timestamp = TRY_CAST(@Field AS DATETIME);
-                ELSE IF @FieldNum = 3 SET @Number = @Field;
-                ELSE IF @FieldNum = 4 SET @Typography = @Field;
-                ELSE IF @FieldNum = 5 SET @TypeNumber = TRY_CAST(@Field AS FLOAT);
-                
-                -- Move to the next field
-                SET @Pos = @NextPos + 1;
-                SET @FieldNum = @FieldNum + 1;
-            END
-            
-            -- Insert the parsed data into the temp table
-            INSERT INTO #TempInfoLogs (
-                machine_id, timestamp, number, typography, type_number
-            )
-            VALUES (
-                @MachineId, @Timestamp, @Number, @Typography, @TypeNumber
-            );
-            
-            FETCH NEXT FROM lineCursor INTO @Line;
-        END
-        
-        CLOSE lineCursor;
-        DEALLOCATE lineCursor;
-        
-        -- Auto-add missing machine_ids to the machine_names table
-        INSERT INTO machine_names (machine_id, name)
-        SELECT DISTINCT t.machine_id, 'Machine ' + CAST(t.machine_id AS NVARCHAR(10))
-        FROM #TempInfoLogs t
-        LEFT JOIN machine_names m ON t.machine_id = m.machine_id
-        WHERE m.machine_id IS NULL
-        AND t.machine_id IS NOT NULL;
-        
-        -- Log how many machines were added
-        PRINT 'New machines added: ' + CAST(@@ROWCOUNT AS VARCHAR(20));
-        
-        -- Log the import operation
-        DECLARE @RowsImported INT;
-        SELECT @RowsImported = COUNT(*) FROM #TempInfoLogs;
-        
-        PRINT 'Successfully imported data from ' + @FilePath;
-        PRINT 'Rows imported: ' + CAST(@RowsImported AS VARCHAR(20));
-        
-        -- Insert only new records (now all machine_ids should exist)
-        INSERT INTO info_logs (
-            machine_id, timestamp, number, typography, type_number
-        )
-        SELECT 
-            t.machine_id, t.timestamp, t.number, t.typography, t.type_number
-        FROM #TempInfoLogs t
-        LEFT JOIN info_logs i ON 
-            t.machine_id = i.machine_id AND
-            t.timestamp = i.timestamp AND
-            t.number = i.number AND
-            t.typography = i.typography
-        WHERE i.machine_id IS NULL
-        AND t.machine_id IS NOT NULL;
-        
-        -- Log how many new records were inserted
-        PRINT 'New records inserted: ' + CAST(@@ROWCOUNT AS VARCHAR(20));
-        
-        -- Drop the temporary tables
-        DROP TABLE #RawData;
-        DROP TABLE #TempInfoLogs;
-        
-    END TRY
-    BEGIN CATCH
-        SELECT @ErrorMessage = 
-            'Error ' + CONVERT(VARCHAR(50), ERROR_NUMBER()) + 
-            ', Severity ' + CONVERT(VARCHAR(5), ERROR_SEVERITY()) + 
-            ', State ' + CONVERT(VARCHAR(5), ERROR_STATE()) + 
-            ', Line ' + CONVERT(VARCHAR(5), ERROR_LINE()) + 
-            ', Message: ' + ERROR_MESSAGE();
-            
-        RAISERROR(@ErrorMessage, 16, 1);
-        
-        -- Log to SQL Server Error Log
-        EXEC sp_executesql N'RAISERROR(''Info Import Error: %s'', 10, 1, @ErrorMessage) WITH LOG', 
-                      N'@ErrorMessage NVARCHAR(4000)', @ErrorMessage;
-        
-        -- Clean up temporary tables and cursor if they exist
-        IF CURSOR_STATUS('local', 'lineCursor') = 1
-        BEGIN
-            CLOSE lineCursor;
-            DEALLOCATE lineCursor;
-        END
-        
-        IF OBJECT_ID('tempdb..#RawData') IS NOT NULL
-            DROP TABLE #RawData;
-            
-        IF OBJECT_ID('tempdb..#TempInfoLogs') IS NOT NULL
-            DROP TABLE #TempInfoLogs;
-            
-        RETURN -1;
-    END CATCH
-    
-    RETURN 0;
-END;
-```
-
-## 5. Rinse Logs Debug Procedure
-
-```sql
-USE [machine_data]
-GO
-
-CREATE PROCEDURE [dbo].[sp_ImportRinseLogs_Debug]
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    -- Read the file directly using xp_cmdshell
-    CREATE TABLE #RawData (line_data NVARCHAR(MAX));
-    
-    -- Import the file using xp_cmdshell to ensure we get all lines
-    INSERT INTO #RawData
-    EXEC master.dbo.xp_cmdshell 'type "C:\Users\Administrator\DataCycleProject\SilverRawData\Rinse\current\Silver_Rinse.dat"';
-    
-    -- Remove NULL rows and the header row
-    DELETE FROM #RawData WHERE line_data IS NULL OR line_data LIKE 'machine_id%';
-    
-    -- Show sample data
-    SELECT TOP 5 line_data FROM #RawData;
-    
-    -- Take one row for testing
-    DECLARE @TestRow NVARCHAR(MAX);
-    SELECT TOP 1 @TestRow = line_data FROM #RawData;
-    
-    -- Test the parsing of this row
-    SELECT 
-        @TestRow AS original_row,
-        LEFT(@TestRow, CHARINDEX(';', @TestRow) - 1) AS first_field,
-        PARSENAME(REPLACE(@TestRow, ';', '.'), 12) AS machine_id_field,
-        PARSENAME(REPLACE(@TestRow, ';', '.'), 11) AS timestamp_field,
-        PARSENAME(REPLACE(@TestRow, ';', '.'), 1) AS last_field;
-    
-    -- Count records with non-NULL machine_id after parsing
-    CREATE TABLE #TestParsing (
-        machine_id INT NULL,
-        other_field VARCHAR(10)
-    );
-    
-    INSERT INTO #TestParsing
-    SELECT 
-        TRY_CAST(PARSENAME(REPLACE(line_data, ';', '.'), 12) AS INT),
-        'test'
-    FROM #RawData
-    WHERE line_data IS NOT NULL AND line_data <> '';
-    
-    SELECT 
-        COUNT(*) AS total_rows,
-        SUM(CASE WHEN machine_id IS NOT NULL THEN 1 ELSE 0 END) AS rows_with_machine_id,
-        SUM(CASE WHEN machine_id IS NULL THEN 1 ELSE 0 END) AS rows_with_null_machine_id
-    FROM #TestParsing;
-    
-    -- Clean up
-    DROP TABLE #RawData;
-    DROP TABLE #TestParsing;
-END;
-```
-
-## 6. Info Logs Debug Procedure
-
-```sql
-USE [machine_data]
-GO
-
-CREATE PROCEDURE [dbo].[sp_ImportInfoLogs_Debug]
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    DECLARE @ErrorMessage NVARCHAR(4000);
-    DECLARE @FilePath NVARCHAR(255) = 'C:\Users\Administrator\DataCycleProject\SilverRawData\Info\current\Silver_Info.dat';
-    
-    BEGIN TRY
-        -- Check if file exists
-        DECLARE @FileExists INT = 0;
-        EXEC master.dbo.xp_fileexist @FilePath, @FileExists OUTPUT;
-        SELECT 'File exists check:', @FileExists;
-        
-        -- Create a staging table
-        CREATE TABLE #StagingInfoLogs (
-            line_data NVARCHAR(MAX)
-        );
-        
-        -- Try different line terminators
-        PRINT 'Trying with \n terminator:';
-        DECLARE @BulkCommand NVARCHAR(4000);
-        SET @BulkCommand = 'BULK INSERT #StagingInfoLogs FROM ''' + @FilePath + ''' WITH (ROWTERMINATOR = ''\n'', CODEPAGE = ''65001'')';
-        
-        EXEC sp_executesql @BulkCommand;
-        
-        -- Check what was loaded
-        SELECT 'Rows loaded (LF):', COUNT(*) FROM #StagingInfoLogs;
-        SELECT TOP 5 'Raw data sample:', line_data FROM #StagingInfoLogs;
-        
-        -- Check for empty rows
-        SELECT 'Empty rows:', COUNT(*) FROM #StagingInfoLogs WHERE RTRIM(LTRIM(line_data)) = '';
-        
-        -- Clean and try again with CRLF
-        TRUNCATE TABLE #StagingInfoLogs;
-        
-        PRINT 'Trying with \r\n terminator:';
-        SET @BulkCommand = 'BULK INSERT #StagingInfoLogs FROM ''' + @FilePath + ''' WITH (ROWTERMINATOR = ''\r\n'', CODEPAGE = ''65001'')';
-        EXEC sp_executesql @BulkCommand;
-        
-        -- Check what was loaded
-        SELECT 'Rows loaded (CRLF):', COUNT(*) FROM #StagingInfoLogs;
-        
-        -- Verify header detection
-        SELECT 'Header rows found:', COUNT(*) 
-        FROM #StagingInfoLogs 
-        WHERE line_data LIKE 'machine_id%';
-        
-        -- Create a temporary table for the parsed data
-        CREATE TABLE #TempInfoLogs (
-            machine_id INT NULL,
-            timestamp DATETIME NULL,
-            number NVARCHAR(50) NULL,
-            typography NVARCHAR(10) NULL,
-            type_number FLOAT NULL
-        );
-        
-        -- Test the PARSENAME operation on a sample row
-        SELECT TOP 1
-            'Original data:', line_data,
-            'After REPLACE:', REPLACE(line_data, ';', '.'),
-            'PARSENAME 5:', PARSENAME(REPLACE(line_data, ';', '.'), 5),
-            'PARSENAME 4:', PARSENAME(REPLACE(line_data, ';', '.'), 4),
-            'PARSENAME 3:', PARSENAME(REPLACE(line_data, ';', '.'), 3),
-            'PARSENAME 2:', PARSENAME(REPLACE(line_data, ';', '.'), 2),
-            'PARSENAME 1:', PARSENAME(REPLACE(line_data, ';', '.'), 1)
-        FROM #StagingInfoLogs
-        WHERE line_data NOT LIKE 'machine_id%';
-        
-        -- Parse data from the staging table, skipping header row
-        INSERT INTO #TempInfoLogs
-        SELECT 
-            CAST(PARSENAME(REPLACE(t.cols, ';', '.'), 5) AS INT),
-            CAST(PARSENAME(REPLACE(t.cols, ';', '.'), 4) AS DATETIME),
-            PARSENAME(REPLACE(t.cols, ';', '.'), 3),
-            PARSENAME(REPLACE(t.cols, ';', '.'), 2),
-            CAST(PARSENAME(REPLACE(t.cols, ';', '.'), 1) AS FLOAT)
-        FROM (
-            SELECT line_data as cols FROM #StagingInfoLogs 
-            WHERE line_data NOT LIKE 'machine_id%' -- Skip header row
-        ) t;
-        
-        -- Check what was parsed
-        SELECT 'Rows successfully parsed:', COUNT(*) FROM #TempInfoLogs;
-        SELECT TOP 5 * FROM #TempInfoLogs;
-        
-        -- Check for NULLs in important fields
-        SELECT 'Rows with NULL machine_id:', COUNT(*) FROM #TempInfoLogs WHERE machine_id IS NULL;
-        SELECT 'Rows with NULL timestamp:', COUNT(*) FROM #TempInfoLogs WHERE timestamp IS NULL;
-        
-        -- Drop the temporary tables
-        DROP TABLE #StagingInfoLogs;
-        DROP TABLE #TempInfoLogs;
-        
-    END TRY
-    BEGIN CATCH
-        SELECT @ErrorMessage = 
-            'Error ' + CONVERT(VARCHAR(50), ERROR_NUMBER()) + 
-            ', Severity ' + CONVERT(VARCHAR(5), ERROR_SEVERITY()) + 
-            ', State ' + CONVERT(VARCHAR(5), ERROR_STATE()) + 
-            ', Line ' + CONVERT(VARCHAR(5), ERROR_LINE()) + 
-            ', Message: ' + ERROR_MESSAGE();
-            
-        SELECT 'ERROR:', @ErrorMessage;
-        
-        -- Clean up temporary tables if they exist
-        IF OBJECT_ID('tempdb..#StagingInfoLogs') IS NOT NULL
-            DROP TABLE #StagingInfoLogs;
-            
-        IF OBJECT_ID('tempdb..#TempInfoLogs') IS NOT NULL
-            DROP TABLE #TempInfoLogs;
-            
-        RETURN -1;
-    END CATCH
-    
-    RETURN 0;
-END;
-``` 2 SET @TimestampStart = TRY_CAST(@Field AS DATETIME);
+                ELSE IF @FieldNum = 2 SET @TimestampStart = TRY_CAST(@Field AS DATETIME);
                 ELSE IF @FieldNum = 3 SET @TimestampEnd = TRY_CAST(@Field AS DATETIME);
                 ELSE IF @FieldNum = 4 SET @PowderCleanStatus = TRY_CAST(@Field AS SMALLINT);
                 ELSE IF @FieldNum = 5 SET @TabsStatusLeft = TRY_CAST(@Field AS SMALLINT);
@@ -585,15 +307,19 @@ END;
     
     RETURN 0;
 END;
-```
 
-## 4. Info Logs Import Procedure
+## 6. Info Logs Debug Procedure
 
 ```sql
 USE [machine_data]
 GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 
-CREATE PROCEDURE [dbo].[sp_ImportInfoLogs]
+-- Create a debug version of the procedure
+ALTER PROCEDURE [dbo].[sp_ImportInfoLogs_Debug]
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -602,15 +328,44 @@ BEGIN
     DECLARE @FilePath NVARCHAR(255) = 'C:\Users\Administrator\DataCycleProject\SilverRawData\Info\current\Silver_Info.dat';
     
     BEGIN TRY
-        -- Read the file directly using xp_cmdshell
-        CREATE TABLE #RawData (line_data NVARCHAR(MAX));
+        -- Check if file exists
+        DECLARE @FileExists INT = 0;
+        EXEC master.dbo.xp_fileexist @FilePath, @FileExists OUTPUT;
+        SELECT 'File exists check:', @FileExists;
         
-        -- Import the file using xp_cmdshell to ensure we get all lines
-        INSERT INTO #RawData
-        EXEC master.dbo.xp_cmdshell 'type "C:\Users\Administrator\DataCycleProject\SilverRawData\Info\current\Silver_Info.dat"';
+        -- Create a staging table
+        CREATE TABLE #StagingInfoLogs (
+            line_data NVARCHAR(MAX)
+        );
         
-        -- Remove NULL rows and the header row
-        DELETE FROM #RawData WHERE line_data IS NULL OR line_data LIKE 'machine_id%';
+        -- Try different line terminators
+        PRINT 'Trying with \n terminator:';
+        DECLARE @BulkCommand NVARCHAR(4000);
+        SET @BulkCommand = 'BULK INSERT #StagingInfoLogs FROM ''' + @FilePath + ''' WITH (ROWTERMINATOR = ''\n'', CODEPAGE = ''65001'')';
+        
+        EXEC sp_executesql @BulkCommand;
+        
+        -- Check what was loaded
+        SELECT 'Rows loaded (LF):', COUNT(*) FROM #StagingInfoLogs;
+        SELECT TOP 5 'Raw data sample:', line_data FROM #StagingInfoLogs;
+        
+        -- Check for empty rows
+        SELECT 'Empty rows:', COUNT(*) FROM #StagingInfoLogs WHERE RTRIM(LTRIM(line_data)) = '';
+        
+        -- Clean and try again with CRLF
+        TRUNCATE TABLE #StagingInfoLogs;
+        
+        PRINT 'Trying with \r\n terminator:';
+        SET @BulkCommand = 'BULK INSERT #StagingInfoLogs FROM ''' + @FilePath + ''' WITH (ROWTERMINATOR = ''\r\n'', CODEPAGE = ''65001'')';
+        EXEC sp_executesql @BulkCommand;
+        
+        -- Check what was loaded
+        SELECT 'Rows loaded (CRLF):', COUNT(*) FROM #StagingInfoLogs;
+        
+        -- Verify header detection
+        SELECT 'Header rows found:', COUNT(*) 
+        FROM #StagingInfoLogs 
+        WHERE line_data LIKE 'machine_id%';
         
         -- Create a temporary table for the parsed data
         CREATE TABLE #TempInfoLogs (
@@ -621,49 +376,67 @@ BEGIN
             type_number FLOAT NULL
         );
         
-        -- Parse data using a cursor-based approach with string manipulation
-        DECLARE @Delimiter CHAR(1) = ';';
+        -- Test the PARSENAME operation on a sample row
+        SELECT TOP 1
+            'Original data:', line_data,
+            'After REPLACE:', REPLACE(line_data, ';', '.'),
+            'PARSENAME 5:', PARSENAME(REPLACE(line_data, ';', '.'), 5),
+            'PARSENAME 4:', PARSENAME(REPLACE(line_data, ';', '.'), 4),
+            'PARSENAME 3:', PARSENAME(REPLACE(line_data, ';', '.'), 3),
+            'PARSENAME 2:', PARSENAME(REPLACE(line_data, ';', '.'), 2),
+            'PARSENAME 1:', PARSENAME(REPLACE(line_data, ';', '.'), 1)
+        FROM #StagingInfoLogs
+        WHERE line_data NOT LIKE 'machine_id%';
         
-        -- Process each row
-        DECLARE @Line NVARCHAR(MAX);
-        DECLARE @Pos INT;
-        DECLARE @NextPos INT;
-        DECLARE @FieldNum INT;
-        DECLARE @Field NVARCHAR(MAX);
+        -- Parse data from the staging table, skipping header row
+        INSERT INTO #TempInfoLogs
+        SELECT 
+            CAST(PARSENAME(REPLACE(t.cols, ';', '.'), 5) AS INT),
+            CAST(PARSENAME(REPLACE(t.cols, ';', '.'), 4) AS DATETIME),
+            PARSENAME(REPLACE(t.cols, ';', '.'), 3),
+            PARSENAME(REPLACE(t.cols, ';', '.'), 2),
+            CAST(PARSENAME(REPLACE(t.cols, ';', '.'), 1) AS FLOAT)
+        FROM (
+            SELECT line_data as cols FROM #StagingInfoLogs 
+            WHERE line_data NOT LIKE 'machine_id%' -- Skip header row
+        ) t;
         
-        -- Declare variables for each field
-        DECLARE @MachineId INT;
-        DECLARE @Timestamp DATETIME;
-        DECLARE @Number NVARCHAR(50);
-        DECLARE @Typography NVARCHAR(10);
-        DECLARE @TypeNumber FLOAT;
+        -- Check what was parsed
+        SELECT 'Rows successfully parsed:', COUNT(*) FROM #TempInfoLogs;
+        SELECT TOP 5 * FROM #TempInfoLogs;
         
-        DECLARE lineCursor CURSOR FOR SELECT line_data FROM #RawData;
-        OPEN lineCursor;
-        FETCH NEXT FROM lineCursor INTO @Line;
+        -- Check for NULLs in important fields
+        SELECT 'Rows with NULL machine_id:', COUNT(*) FROM #TempInfoLogs WHERE machine_id IS NULL;
+        SELECT 'Rows with NULL timestamp:', COUNT(*) FROM #TempInfoLogs WHERE timestamp IS NULL;
         
-        WHILE @@FETCH_STATUS = 0
-        BEGIN
-            SET @Pos = 1;
-            SET @FieldNum = 1;
+        -- Drop the temporary tables
+        DROP TABLE #StagingInfoLogs;
+        DROP TABLE #TempInfoLogs;
+        
+    END TRY
+    BEGIN CATCH
+        SELECT @ErrorMessage = 
+            'Error ' + CONVERT(VARCHAR(50), ERROR_NUMBER()) + 
+            ', Severity ' + CONVERT(VARCHAR(5), ERROR_SEVERITY()) + 
+            ', State ' + CONVERT(VARCHAR(5), ERROR_STATE()) + 
+            ', Line ' + CONVERT(VARCHAR(5), ERROR_LINE()) + 
+            ', Message: ' + ERROR_MESSAGE();
             
-            -- Initialize all variables to NULL
-            SET @MachineId = NULL;
-            SET @Timestamp = NULL;
-            SET @Number = NULL;
-            SET @Typography = NULL;
-            SET @TypeNumber = NULL;
+        SELECT 'ERROR:', @ErrorMessage;
+        
+        -- Clean up temporary tables if they exist
+        IF OBJECT_ID('tempdb..#StagingInfoLogs') IS NOT NULL
+            DROP TABLE #StagingInfoLogs;
             
-            WHILE @Pos <= LEN(@Line) AND @FieldNum <= 5
-            BEGIN
-                SET @NextPos = CHARINDEX(@Delimiter, @Line + @Delimiter, @Pos);
-                IF @NextPos = 0 SET @NextPos = LEN(@Line) + 1;
-                
-                SET @Field = SUBSTRING(@Line, @Pos, @NextPos - @Pos);
-                
-                -- Assign the field to the correct variable based on its position
-                IF @FieldNum = 1 SET @MachineId = TRY_CAST(@Field AS INT);
-                ELSE IF @FieldNum =
+        IF OBJECT_ID('tempdb..#TempInfoLogs') IS NOT NULL
+            DROP TABLE #TempInfoLogs;
+            
+        RETURN -1;
+    END CATCH
+    
+    RETURN 0;
+END;
+```
 ```
 
 ## 2. Rinse Logs Import Procedure
@@ -671,8 +444,12 @@ BEGIN
 ```sql
 USE [machine_data]
 GO
-
-CREATE PROCEDURE [dbo].[sp_ImportRinseLogs]
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- Updated Rinse Logs Import Procedure with Fixed Parsing
+ALTER PROCEDURE [dbo].[sp_ImportRinseLogs]
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -879,8 +656,13 @@ END;
 ```sql
 USE [machine_data]
 GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 
-CREATE PROCEDURE [dbo].[sp_ImportProductLogs]
+-- Updated Product Logs Import Procedure with Fixed Parsing
+ALTER PROCEDURE [dbo].[sp_ImportProductLogs]
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1118,4 +900,248 @@ BEGIN
     END CATCH
     
     RETURN 0;
+END;
+```
+
+## 4. Info Logs Import Procedure
+
+```sql
+USE [machine_data]
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+-- Updated Info Logs Import Procedure with Fixed Parsing
+ALTER PROCEDURE [dbo].[sp_ImportInfoLogs]
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    DECLARE @ErrorMessage NVARCHAR(4000);
+    DECLARE @FilePath NVARCHAR(255) = 'C:\Users\Administrator\DataCycleProject\SilverRawData\Info\current\Silver_Info.dat';
+    
+    BEGIN TRY
+        -- Read the file directly using xp_cmdshell
+        CREATE TABLE #RawData (line_data NVARCHAR(MAX));
+        
+        -- Import the file using xp_cmdshell to ensure we get all lines
+        INSERT INTO #RawData
+        EXEC master.dbo.xp_cmdshell 'type "C:\Users\Administrator\DataCycleProject\SilverRawData\Info\current\Silver_Info.dat"';
+        
+        -- Remove NULL rows and the header row
+        DELETE FROM #RawData WHERE line_data IS NULL OR line_data LIKE 'machine_id%';
+        
+        -- Create a temporary table for the parsed data
+        CREATE TABLE #TempInfoLogs (
+            machine_id INT NULL,
+            timestamp DATETIME NULL,
+            number NVARCHAR(50) NULL,
+            typography NVARCHAR(10) NULL,
+            type_number FLOAT NULL
+        );
+        
+        -- Parse data using a cursor-based approach with string manipulation
+        DECLARE @Delimiter CHAR(1) = ';';
+        
+        -- Process each row
+        DECLARE @Line NVARCHAR(MAX);
+        DECLARE @Pos INT;
+        DECLARE @NextPos INT;
+        DECLARE @FieldNum INT;
+        DECLARE @Field NVARCHAR(MAX);
+        
+        -- Declare variables for each field
+        DECLARE @MachineId INT;
+        DECLARE @Timestamp DATETIME;
+        DECLARE @Number NVARCHAR(50);
+        DECLARE @Typography NVARCHAR(10);
+        DECLARE @TypeNumber FLOAT;
+        
+        DECLARE lineCursor CURSOR FOR SELECT line_data FROM #RawData;
+        OPEN lineCursor;
+        FETCH NEXT FROM lineCursor INTO @Line;
+        
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            SET @Pos = 1;
+            SET @FieldNum = 1;
+            
+            -- Initialize all variables to NULL
+            SET @MachineId = NULL;
+            SET @Timestamp = NULL;
+            SET @Number = NULL;
+            SET @Typography = NULL;
+            SET @TypeNumber = NULL;
+            
+            WHILE @Pos <= LEN(@Line) AND @FieldNum <= 5
+            BEGIN
+                SET @NextPos = CHARINDEX(@Delimiter, @Line + @Delimiter, @Pos);
+                IF @NextPos = 0 SET @NextPos = LEN(@Line) + 1;
+                
+                SET @Field = SUBSTRING(@Line, @Pos, @NextPos - @Pos);
+                
+                -- Assign the field to the correct variable based on its position
+                IF @FieldNum = 1 SET @MachineId = TRY_CAST(@Field AS INT);
+                ELSE IF @FieldNum = 2 SET @Timestamp = TRY_CAST(@Field AS DATETIME);
+                ELSE IF @FieldNum = 3 SET @Number = @Field;
+                ELSE IF @FieldNum = 4 SET @Typography = @Field;
+                ELSE IF @FieldNum = 5 SET @TypeNumber = TRY_CAST(@Field AS FLOAT);
+                
+                -- Move to the next field
+                SET @Pos = @NextPos + 1;
+                SET @FieldNum = @FieldNum + 1;
+            END
+            
+            -- Insert the parsed data into the temp table
+            INSERT INTO #TempInfoLogs (
+                machine_id, timestamp, number, typography, type_number
+            )
+            VALUES (
+                @MachineId, @Timestamp, @Number, @Typography, @TypeNumber
+            );
+            
+            FETCH NEXT FROM lineCursor INTO @Line;
+        END
+        
+        CLOSE lineCursor;
+        DEALLOCATE lineCursor;
+        
+        -- Auto-add missing machine_ids to the machine_names table
+        INSERT INTO machine_names (machine_id, name)
+        SELECT DISTINCT t.machine_id, 'Machine ' + CAST(t.machine_id AS NVARCHAR(10))
+        FROM #TempInfoLogs t
+        LEFT JOIN machine_names m ON t.machine_id = m.machine_id
+        WHERE m.machine_id IS NULL
+        AND t.machine_id IS NOT NULL;
+        
+        -- Log how many machines were added
+        PRINT 'New machines added: ' + CAST(@@ROWCOUNT AS VARCHAR(20));
+        
+        -- Log the import operation
+        DECLARE @RowsImported INT;
+        SELECT @RowsImported = COUNT(*) FROM #TempInfoLogs;
+        
+        PRINT 'Successfully imported data from ' + @FilePath;
+        PRINT 'Rows imported: ' + CAST(@RowsImported AS VARCHAR(20));
+        
+        -- Insert only new records (now all machine_ids should exist)
+        INSERT INTO info_logs (
+            machine_id, timestamp, number, typography, type_number
+        )
+        SELECT 
+            t.machine_id, t.timestamp, t.number, t.typography, t.type_number
+        FROM #TempInfoLogs t
+        LEFT JOIN info_logs i ON 
+            t.machine_id = i.machine_id AND
+            t.timestamp = i.timestamp AND
+            t.number = i.number AND
+            t.typography = i.typography
+        WHERE i.machine_id IS NULL
+        AND t.machine_id IS NOT NULL;
+        
+        -- Log how many new records were inserted
+        PRINT 'New records inserted: ' + CAST(@@ROWCOUNT AS VARCHAR(20));
+        
+        -- Drop the temporary tables
+        DROP TABLE #RawData;
+        DROP TABLE #TempInfoLogs;
+        
+    END TRY
+    BEGIN CATCH
+        SELECT @ErrorMessage = 
+            'Error ' + CONVERT(VARCHAR(50), ERROR_NUMBER()) + 
+            ', Severity ' + CONVERT(VARCHAR(5), ERROR_SEVERITY()) + 
+            ', State ' + CONVERT(VARCHAR(5), ERROR_STATE()) + 
+            ', Line ' + CONVERT(VARCHAR(5), ERROR_LINE()) + 
+            ', Message: ' + ERROR_MESSAGE();
+            
+        RAISERROR(@ErrorMessage, 16, 1);
+        
+        -- Log to SQL Server Error Log
+        EXEC sp_executesql N'RAISERROR(''Info Import Error: %s'', 10, 1, @ErrorMessage) WITH LOG', 
+                      N'@ErrorMessage NVARCHAR(4000)', @ErrorMessage;
+        
+        -- Clean up temporary tables and cursor if they exist
+        IF CURSOR_STATUS('local', 'lineCursor') = 1
+        BEGIN
+            CLOSE lineCursor;
+            DEALLOCATE lineCursor;
+        END
+        
+        IF OBJECT_ID('tempdb..#RawData') IS NOT NULL
+            DROP TABLE #RawData;
+            
+        IF OBJECT_ID('tempdb..#TempInfoLogs') IS NOT NULL
+            DROP TABLE #TempInfoLogs;
+            
+        RETURN -1;
+    END CATCH
+    
+    RETURN 0;
+END;
+```
+
+## 5. Rinse Logs Debug Procedure
+
+```sql
+USE [machine_data]
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[sp_ImportRinseLogs_Debug]
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Read the file directly using xp_cmdshell
+    CREATE TABLE #RawData (line_data NVARCHAR(MAX));
+    
+    -- Import the file using xp_cmdshell to ensure we get all lines
+    INSERT INTO #RawData
+    EXEC master.dbo.xp_cmdshell 'type "C:\Users\Administrator\DataCycleProject\SilverRawData\Rinse\current\Silver_Rinse.dat"';
+    
+    -- Remove NULL rows and the header row
+    DELETE FROM #RawData WHERE line_data IS NULL OR line_data LIKE 'machine_id%';
+    
+    -- Show sample data
+    SELECT TOP 5 line_data FROM #RawData;
+    
+    -- Take one row for testing
+    DECLARE @TestRow NVARCHAR(MAX);
+    SELECT TOP 1 @TestRow = line_data FROM #RawData;
+    
+    -- Test the parsing of this row
+    SELECT 
+        @TestRow AS original_row,
+        LEFT(@TestRow, CHARINDEX(';', @TestRow) - 1) AS first_field,
+        PARSENAME(REPLACE(@TestRow, ';', '.'), 12) AS machine_id_field,
+        PARSENAME(REPLACE(@TestRow, ';', '.'), 11) AS timestamp_field,
+        PARSENAME(REPLACE(@TestRow, ';', '.'), 1) AS last_field;
+    
+    -- Count records with non-NULL machine_id after parsing
+    CREATE TABLE #TestParsing (
+        machine_id INT NULL,
+        other_field VARCHAR(10)
+    );
+    
+    INSERT INTO #TestParsing
+    SELECT 
+        TRY_CAST(PARSENAME(REPLACE(line_data, ';', '.'), 12) AS INT),
+        'test'
+    FROM #RawData
+    WHERE line_data IS NOT NULL AND line_data <> '';
+    
+    SELECT 
+        COUNT(*) AS total_rows,
+        SUM(CASE WHEN machine_id IS NOT NULL THEN 1 ELSE 0 END) AS rows_with_machine_id,
+        SUM(CASE WHEN machine_id IS NULL THEN 1 ELSE 0 END) AS rows_with_null_machine_id
+    FROM #TestParsing;
+    
+    -- Clean up
+    DROP TABLE #RawData;
+    DROP TABLE #TestParsing;
 END;
