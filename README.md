@@ -19,17 +19,16 @@ flowchart TD
     subgraph "Sources"
         A[Coffee Machines] --> B[Raw .dat Files]
     end
-
     subgraph "ETL Process"
         B -->|Python scripts| C[Bronze Layer]
         C -->|Python scripts| D[Silver Layer]
         D -->|SQL Procedures| E[Operational DB]
         E -->|SQL Procedures| F[Data Warehouse]
     end
-
     subgraph "Analytics"
-        F -->|ETL| G[KNIME Workflows]
+        E -->|ETL| G[KNIME Workflows]
         F -->|Direct Connection| H[Power BI Dashboard]
+        G -->|Processed Data| H
     end
 ```
 
