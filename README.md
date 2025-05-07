@@ -1,19 +1,45 @@
-# Technical Documentation - Group 10
+# Machine Data Processing System
 
 ## Project Overview
 
-This project implements a multi-stage data processing pipeline for coffee machine operational data. The pipeline follows the medallion architecture pattern with:
+This project implements a comprehensive data processing pipeline for coffee machine operational data. The system follows industry best practices with a multi-stage ETL (Extract, Transform, Load) process and uses a medallion architecture pattern.
 
-1. **Bronze Layer**: Raw data ingestion and initial consolidation from .dat files
-2. **Silver Layer**: Data validation, cleaning, and standardization
-3. **Gold Layer**: OLAP destination
+### Key Components
 
-The system processes various types of machine operational data including cleaning cycles, rinse operations, product usage, and information messages.
+1. **Data Collection**: Automated extraction from coffee machines via SMB connection
+2. **Data Processing Pipeline**: Bronze → Silver → Gold (Data Warehouse)
+3. **Relational Database**: Structured storage of operational data
+4. **Data Warehouse**: Star schema for analytical processing
+5. **Analytics Integration**: Data visualization and prediction with KNIME and Power BI
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    subgraph "Sources"
+        A[Coffee Machines] --> B[Raw .dat Files]
+    end
+
+    subgraph "ETL Process"
+        B -->|Python scripts| C[Bronze Layer]
+        C -->|Python scripts| D[Silver Layer]
+        D -->|SQL Procedures| E[Operational DB]
+        E -->|SQL Procedures| F[Data Warehouse]
+    end
+
+    subgraph "Analytics"
+        F -->|ETL| G[KNIME Workflows]
+        F -->|Direct Connection| H[Power BI Dashboard]
+    end
 ```
-Project Directory Structure
+
+## Directory Structure
+
+
+The ETL process uses the following directory structure:
+
+```
+DataCycleProject/
 │
 ├── EversysDatFiles/                 # Source directory for raw .dat files
 │
@@ -68,131 +94,188 @@ Project Directory Structure
     └── silver_rinse.py              # Silver layer ETL for rinse operations
 ```
 
-## Data Flow
+## Database Architecture
 
-1. Raw `.dat` files are collected in `EversysDatFiles/` directory
-2. Bronze processor script consolidates files by category (Cleaning, Rinse, Info, Product)
-3. Silver layer scripts validate, clean, and standardize each data category
-4. Data is stored in both current and historical (date-based) directories
-5. Processed data is tracked to prevent reprocessing
+### Operational Database (machine_data)
 
-## Processing Components
+The operational database stores the raw cleaned data from coffee machines in a normalized structure.
 
-### Bronze Layer (bronze_processor.py)
+```mermaid
+erDiagram
+    machine_names ||--o{ cleaning_logs : has
+    machine_names ||--o{ rinse_logs : has
+    machine_names ||--o{ product_logs : has
+    machine_names ||--o{ info_logs : has
+```
 
-This script provides the initial data ingestion and consolidation:
+### Data Warehouse (DWmachines)
 
-- Reads raw `.dat` files from the source directory
-- Categorizes files by type (Cleaning, Rinse, Info, Product)
-- Consolidates data into category-specific files
-- Maintains a history of processed files
-- Creates backup copies in date-organized folders
+The data warehouse implements a star schema optimized for analytical queries:
 
-Key functions:
-- `process_files()`: Processes and merges new .dat files
-- `ensure_current_files()`: Ensures that required output files exist
-- `backup_file()`: Creates historical copies of processed files
+- **Dimension Tables**: Store descriptive attributes (DimMachine, DimDate, DimTime, etc.)
+- **Fact Tables**: Store measurements with foreign keys to dimensions (FactMachineCleaning, FactRinseOperation, etc.)
 
-### Silver Layer
+```mermaid
+erDiagram
+    DimMachine ||--o{ FactMachineCleaning : dimensions
+    DimMachine ||--o{ FactRinseOperation : dimensions
+    DimMachine ||--o{ FactInfoLog : dimensions
+    DimMachine ||--o{ FactProductRun : dimensions
+    
+    DimDate ||--o{ FactMachineCleaning : dimensions
+    DimDate ||--o{ FactRinseOperation : dimensions
+    DimDate ||--o{ FactInfoLog : dimensions
+    DimDate ||--o{ FactProductRun : dimensions
+```
 
-The silver layer consists of three specialized scripts for different data categories:
+## ETL Process
 
-#### 1. silver_cleaning.py
+The ETL process is fully automated and consists of the following steps:
 
-Processes cleaning cycle data with the following validations:
-- Machine ID validation
-- Timestamp standardization
-- Status code validation for various components
-- Temperature and RPM validation
-- Two-value field parsing
+1. **Raw Data Download**: Python script connects to SMB server and downloads .dat files
+2. **Bronze Layer**: Files are consolidated by category
+3. **Silver Layer**: Data is validated, cleaned, and standardized  
+4. **Operational DB**: Data is imported into relational tables
+5. **Data Warehouse**: Dimensional model is populated from operational data
 
-#### 2. silver_info.py 
+## Automation
 
-Processes information messages with validations for:
-- Machine ID validation (smallint range)
-- Timestamp standardization
-- Message type number validation
+The system is fully automated through:
 
-#### 3. silver_rinse.py
+1. **GitHub Actions**: 
+   - "Execute Eversys Scripts" (runs every 30 minutes) - Executes Python ETL scripts
+   - "Deploy on VM" (runs on code changes) - Updates code on production VM
 
-Processes rinsing operation data with validations for:
-- Machine ID validation
-- Timestamp standardization
-- Flow rate validation
-- Status code validation
-- Pressure validation
+2. **SQL Server Agent Jobs**:
+   - Import jobs for each log type
+   - Master import job to run all procedures
+   - Data warehouse ETL job
+   - Database backup job
 
-### Common Features Across Silver Layer Scripts
+## Analytics
 
-All silver layer scripts share common functionality:
-- Line-level hash tracking to prevent duplicate processing
-- Data type validation and standardization
-- Error logging for invalid values
-- Historical data preservation
-- Appending to existing files with proper header handling
+### KNIME Integration
 
-## Processing Safeguards
+@Todo Francesco change text
+The data from the Data Warehouse is imported into KNIME workflows for advanced analytics, including:
 
-The pipeline implements several safeguards:
+- Machine performance analysis
+- Predictive algorithms
+- Usage pattern identification
 
-1. **Idempotent Processing**: Each file and line is processed exactly once
-2. **Hash-based Tracking**: MD5 hashes are used to track processed data
-3. **Temporary Files**: Processing uses temp files before committing changes
-4. **Historical Preservation**: All stages maintain dated historical copies
-5. **Error Handling**: Validation failures are logged but don't stop processing
-6. **Directory Creation**: Automatic creation of required directories
+### Power BI Dashboard
 
-## Data Validation Rules
+@todo Tony
+A Power BI dashboard provides visualization of key metrics and KPIs:
 
-The system applies specific validation rules for each data type:
+- Machine cleaning effectiveness
+- Product popularity by type
+- Operational efficiency
+- Maintenance scheduling
+- Quality metrics
 
-### Cleaning Data Validation
-- Machine ID: 0-32767
-- Powder status: 0-4
-- Tabs status: 0-7
-- Detergent status: 0-9
-- Milk pump error: 0-1 (binary)
-- Temperature and RPM: Numeric validation
+## Setup and Configuration
 
-### Info Data Validation
-- Machine ID: -32768 to 32767 (smallint range)
-- Timestamp: Standard date format
-- Type number: Integer validation
+### Prerequisites
 
-### Rinse Data Validation
-- Machine ID: 0-32767
-- Rinse type: 0-255
-- Flow rates: Nullable with 65535 as null marker
-- Status values: 0-6
-- Pump pressure: 0-1000
-- Nozzle status: 0-255
+- SQL Server 2019 or newer
+- SQL Server Agent 
+- Python 3.9+
+- Required Python packages: pandas, smbprotocol
+- KNIME Analytics Platform 
+- Power BI Desktop
 
-## Running the Pipeline
+### Installation
 
-1. Run `bronze_processor.py` to consolidate raw data files
-2. Run each silver processing script to clean respective data categories
+1. Create the database and tables:
+```sql
+-- Create the database
+CREATE DATABASE [machine_data]
+GO
+```
 
-These are executed on a schedule via GitHub Actions. 
+2. Set up the directory structure:
+```
+mkdir -p EversysDatFiles
+mkdir -p BronzeRawData/Cleaning/current
+mkdir -p BronzeRawData/Rinse/current 
+mkdir -p BronzeRawData/Product/current
+mkdir -p BronzeRawData/Info/current
+mkdir -p SilverRawData/Cleaning/current
+mkdir -p SilverRawData/Rinse/current
+mkdir -p SilverRawData/Product/current
+mkdir -p SilverRawData/Info/current
+```
 
-## Database Integration
+3. Deploy Python scripts:
+   - Configure SMB connection parameters in downloadeversysfiles.py
+   - Configure file paths in all processing scripts
 
-The processed data is ultimately loaded into:
-1. A relational database (for operational queries)
-2. An OLAP database (for analytical workloads)
+4. Create and configure SQL Server Agent jobs
 
-The loading procedures for these destinations are not included in the provided scripts.
+5. Set up GitHub Actions workflows (see how in [Github-Actions-workflows](./Technical_Documentation/Github-Actions-workflows.md))
 
-## Best Practices and Notes
+6. Configure KNIME workflows [workflows](./Technical_Documentation/knime%20documentation/workflows.md)
 
-1. **Incremental Processing**: The system only processes new files/lines, making it efficient for frequent runs
-2. **Data Lineage**: Historical copies at all processing stages enable data tracing
-3. **Data Quality**: Extensive validation ensures data integrity
-4. **Idempotence**: Safe to re-run without causing duplication
-5. **Error Handling**: Validation failures are logged but don't halt overall processing
+7. Configure Power BI dashboard
 
+### Configuration Files
 
---- TODO
-+ add database schema link here (image)
-+ add knime workflow (francesco)
-+ mention database backups (backup and document here)
-+ mention mssql jobs and stocked procedures (backup and document here)
+- SMB connection parameters for data download
+- File paths for data processing
+- Database connection parameters
+- Scheduling parameters for automation
+
+## Maintenance
+
+### Regular Maintenance Tasks
+
+1. SQL Server database maintenance:
+   - Index rebuilding
+   - Statistics updates
+   - Database backups
+
+2. ETL Process monitoring:
+   - Check GitHub Actions logs
+   - Verify SQL Server Agent job history
+   - Monitor ETL errors and warnings
+
+3. Performance optimization:
+   - Query performance tuning
+   - ETL process optimization
+
+## Documentation
+
+Detailed documentation for all system components is available:
+
+- [ETL Process Documentation](./Technical_Documentation/ETL-Process-Flow.md)
+- [Github Actions Workflows](./Technical_Documentation/Github-Actions-workflows.md)
+
+#### Database
+- [Database Setup](./Technical_Documentation/database%20documentation/DB-Import-Setup-Guide.md)
+- [Database Overview](./Technical_Documentation/DB-System-Overview.md)
+- [Database Schema Documentation](./Technical_Documentation/database%20documentation/DB-Schema.md)
+- [Database Stored Procedures](./Technical_Documentation/database%20documentation/DB-Stored-Procedures.md)
+- [Database ETL Process](./Technical_Documentation/database%20documentation/DB-ETL-Process.md)
+- [Database SQL Server Agent Jobs](./Technical_Documentation/database%20documentation/DB-SQL-Server-Agent-Jobs.md)
+
+#### Data Warehouse
+- [Data Warehouse Schema Documentation](./Technical_Documentation/datawarehouse%20documentation/DW-Schema.md)
+- [Data Warehouse Overview](./Technical_Documentation/DW-System-Overview.md)
+- [Data Warehouse Stored Procedures](./Technical_Documentation/datawarehouse%20documentation/DW-Stored-Procedures.md)
+- [Data Warehouse Fact Tables](./Technical_Documentation/datawarehouse%20documentation/DW-Fact-Tables.md)
+- [Data Warehouse Dim Tables](./Technical_Documentation/datawarehouse%20documentation/DW-Dimension-Tables.md)
+
+## Technical Details
+
+- **Programming Languages**: SQL, Python, M (Power Query)
+- **Databases**: SQL Server (Operational DB, Data Warehouse)
+- **ETL Tools**: Custom Python scripts, SQL Server Stored Procedures
+- **Analytics Tools**: KNIME Analytics Platform, Power BI
+- **Automation**: GitHub Actions, SQL Server Agent
+- **Data Architecture**: Medallion architecture (Bronze, Silver, Gold)
+- **Data Modeling**: Relational (OLTP), Star Schema (OLAP)
+
+## Contributors
+
+- Group 10 Team Members: De Carvalho Tony, De Fino Francesco, Mabillard Marie-Esther
