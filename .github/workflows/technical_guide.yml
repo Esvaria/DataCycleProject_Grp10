@@ -45,30 +45,32 @@ jobs:
           mkdir -p src/datawarehouse_documentation
           mkdir -p src/knime_documentation
           
-          # Copy overview files
-          cp ETL-process-flow.md src/ || echo "File not found: ETL-process-flow.md"
-          cp DB-System-Overview.md src/ || echo "File not found: DB-System-Overview.md"
-          cp DW-System-Overview.md src/ || echo "File not found: DW-System-Overview.md"
+          # Copy overview files from root or Technical_Documentation folder
+          cp Technical_Documentation/ETL-Process-Flow.md src/ || cp ETL-Process-Flow.md src/ || echo "File not found: ETL-Process-Flow.md"
+          cp Technical_Documentation/DB-System-Overview.md src/ || cp DB-System-Overview.md src/ || echo "File not found: DB-System-Overview.md"
+          cp Technical_Documentation/DW-System-Overview.md src/ || cp DW-System-Overview.md src/ || echo "File not found: DW-System-Overview.md"
           
           # Copy database documentation files
-          cp database_documentation/DB-ETL-Process.md src/database_documentation/ || echo "File not found: database_documentation/DB-ETL-Process.md"
-          cp database_documentation/DB-Import-Setup-Guide.md src/database_documentation/ || echo "File not found: database_documentation/DB-Import-Setup-Guide.md"
-          cp database_documentation/DB-SQL-Server-Agent-Jobs.md src/database_documentation/ || echo "File not found: database_documentation/DB-SQL-Server-Agent-Jobs.md"
-          cp database_documentation/DB-Schema.md src/database_documentation/ || echo "File not found: database_documentation/DB-Schema.md"
-          cp database_documentation/DB-Stored-Procedures.md src/database_documentation/ || echo "File not found: database_documentation/DB-Stored-Procedures.md"
+          cp Technical_Documentation/database_documentation/DB-ETL-Process.md src/database_documentation/ || cp database_documentation/DB-ETL-Process.md src/database_documentation/ || echo "File not found: database_documentation/DB-ETL-Process.md"
+          cp Technical_Documentation/database_documentation/DB-Import-Setup-Guide.md src/database_documentation/ || cp database_documentation/DB-Import-Setup-Guide.md src/database_documentation/ || echo "File not found: database_documentation/DB-Import-Setup-Guide.md"
+          cp Technical_Documentation/database_documentation/DB-SQL-Server-Agent-Jobs.md src/database_documentation/ || cp database_documentation/DB-SQL-Server-Agent-Jobs.md src/database_documentation/ || echo "File not found: database_documentation/DB-SQL-Server-Agent-Jobs.md"
+          cp Technical_Documentation/database_documentation/DB-Schema.md src/database_documentation/ || cp database_documentation/DB-Schema.md src/database_documentation/ || echo "File not found: database_documentation/DB-Schema.md"
+          cp Technical_Documentation/database_documentation/DB-Stored-Procedures.md src/database_documentation/ || cp database_documentation/DB-Stored-Procedures.md src/database_documentation/ || echo "File not found: database_documentation/DB-Stored-Procedures.md"
           
           # Copy datawarehouse documentation files
-          cp datawarehouse_documentation/DW-Dimension-Tables.md src/datawarehouse_documentation/ || echo "File not found: datawarehouse_documentation/DW-Dimension-Tables.md"
-          cp datawarehouse_documentation/DW-Fact-Tables.md src/datawarehouse_documentation/ || echo "File not found: datawarehouse_documentation/DW-Fact-Tables.md"
-          cp datawarehouse_documentation/DW-Schema.md src/datawarehouse_documentation/ || echo "File not found: datawarehouse_documentation/DW-Schema.md"
-          cp datawarehouse_documentation/DW-Stored-Procedures.md src/datawarehouse_documentation/ || echo "File not found: datawarehouse_documentation/DW-Stored-Procedures.md"
+          cp Technical_Documentation/datawarehouse_documentation/DW-Dimension-Tables.md src/datawarehouse_documentation/ || cp datawarehouse_documentation/DW-Dimension-Tables.md src/datawarehouse_documentation/ || echo "File not found: datawarehouse_documentation/DW-Dimension-Tables.md"
+          cp Technical_Documentation/datawarehouse_documentation/DW-Fact-Tables.md src/datawarehouse_documentation/ || cp datawarehouse_documentation/DW-Fact-Tables.md src/datawarehouse_documentation/ || echo "File not found: datawarehouse_documentation/DW-Fact-Tables.md"
+          cp Technical_Documentation/datawarehouse_documentation/DW-Schema.md src/datawarehouse_documentation/ || cp datawarehouse_documentation/DW-Schema.md src/datawarehouse_documentation/ || echo "File not found: datawarehouse_documentation/DW-Schema.md"
+          cp Technical_Documentation/datawarehouse_documentation/DW-Stored-Procedures.md src/datawarehouse_documentation/ || cp datawarehouse_documentation/DW-Stored-Procedures.md src/datawarehouse_documentation/ || echo "File not found: datawarehouse_documentation/DW-Stored-Procedures.md"
           
           # Copy knime documentation files
-          cp knime_documentation/KNIME_workflows.md src/knime_documentation/ || echo "File not found: knime_documentation/KNIME_workflows.md"
+          cp Technical_Documentation/knime_documentation/KNIME_workflows.md src/knime_documentation/ || cp knime_documentation/KNIME_workflows.md src/knime_documentation/ || echo "File not found: knime_documentation/KNIME_workflows.md"
           
           # Copy GitHub Actions documentation
-          mkdir -p src/knime_documentation
-          cp knime_documentation/Github-Actions-workflows.md src/knime_documentation/ || echo "File not found: knime_documentation/Github-Actions-workflows.md"
+          cp Technical_Documentation/knime_documentation/Github-Actions-workflows.md src/knime_documentation/ || cp knime_documentation/Github-Actions-workflows.md src/knime_documentation/ || echo "File not found: knime_documentation/Github-Actions-workflows.md"
+          
+          # Fix case sensitivity issues if needed
+          find Technical_Documentation -name "*.md" -type f -exec bash -c 'cp "$0" "src/${0#Technical_Documentation/}"' {} \; 2>/dev/null || echo "No files found in Technical_Documentation"
       
       - name: Setup Pages
         id: pages
