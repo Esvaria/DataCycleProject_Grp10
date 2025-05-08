@@ -178,7 +178,7 @@ This configuration allows you to:
 
 ### Power BI Dashboard
 
-@todo Tony
+
 A Power BI dashboard provides visualization of key metrics and KPIs:
 
 - Machine cleaning effectiveness
@@ -186,6 +186,8 @@ A Power BI dashboard provides visualization of key metrics and KPIs:
 - Operational efficiency
 - Maintenance scheduling
 - Quality metrics
+- Prediction of machines maintenance
+- Prediction of product consumption
 
 ## Setup and Configuration
 
