@@ -89,7 +89,7 @@ DataCycleProject/
 
 This script connects to the SMB server and downloads the raw data files.
 
-**File: `download_smb_data.py`**
+**File: `downloadeversysdata.py`**
 
 ```python
 import os
