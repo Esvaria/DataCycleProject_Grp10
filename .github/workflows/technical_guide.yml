@@ -29,105 +29,94 @@ jobs:
           # Create src directory if it doesn't exist
           mkdir -p src
           
-          # Copy README.md to src directory if it exists
-          if [ -f README.md ]; then
-            cp README.md src/
-          else
-            # Create a default README.md if it doesn't exist
-            echo "# Technical Documentation" > src/README.md
-          fi
-          
-          # Copy SUMMARY.md to src directory
-          cp SUMMARY.md src/
-          
           # Debug - list directories to see actual structure
           echo "Current directory structure:"
           find . -type f -name "*.md" | sort
           
-          # Create directories in src with URL-encoded spaces
-          mkdir -p "src/database%20documentation"
-          mkdir -p "src/datawarehouse%20documentation"
-          mkdir -p "src/knime%20documentation"
+          # Copy entire Technical_Documentation directory to src
+          cp -r Technical_Documentation src/
           
-          # Copy files from Technical_Documentation directly to src
-          cp "Technical_Documentation/ETL-Process-Flow.md" src/ || echo "File not found: Technical_Documentation/ETL-Process-Flow.md"
-          cp "Technical_Documentation/DB-System-Overview.md" src/ || echo "File not found: Technical_Documentation/DB-System-Overview.md"
-          cp "Technical_Documentation/DW-System-Overview.md" src/ || echo "File not found: Technical_Documentation/DW-System-Overview.md"
-          cp "Technical_Documentation/Github-Actions-workflows.md" "src/knime%20documentation/" || echo "File not found: Technical_Documentation/Github-Actions-workflows.md"
-          
-          # Copy database documentation files
-          cp "Technical_Documentation/database documentation/DB-ETL-Process.md" "src/database%20documentation/" || echo "File not found: Technical_Documentation/database documentation/DB-ETL-Process.md"
-          cp "Technical_Documentation/database documentation/DB-Import-Setup-Guide.md" "src/database%20documentation/" || echo "File not found: Technical_Documentation/database documentation/DB-Import-Setup-Guide.md"
-          cp "Technical_Documentation/database documentation/DB-Schema.md" "src/database%20documentation/" || echo "File not found: Technical_Documentation/database documentation/DB-Schema.md"
-          cp "Technical_Documentation/database documentation/DB-SQL-Server-Agent-Jobs.md" "src/database%20documentation/" || echo "File not found: Technical_Documentation/database documentation/DB-SQL-Server-Agent-Jobs.md"
-          cp "Technical_Documentation/database documentation/DB-Stored-Procedures.md" "src/database%20documentation/" || echo "File not found: Technical_Documentation/database documentation/DB-Stored-Procedures.md"
-          
-          # Copy datawarehouse documentation files
-          cp "Technical_Documentation/datawarehouse documentation/DW-Dimension-Tables.md" "src/datawarehouse%20documentation/" || echo "File not found: Technical_Documentation/datawarehouse documentation/DW-Dimension-Tables.md"
-          cp "Technical_Documentation/datawarehouse documentation/DW-Fact-Tables.md" "src/datawarehouse%20documentation/" || echo "File not found: Technical_Documentation/datawarehouse documentation/DW-Fact-Tables.md"
-          cp "Technical_Documentation/datawarehouse documentation/DW-Schema.md" "src/datawarehouse%20documentation/" || echo "File not found: Technical_Documentation/datawarehouse documentation/DW-Schema.md"
-          cp "Technical_Documentation/datawarehouse documentation/DW-Stored-Procedures.md" "src/datawarehouse%20documentation/" || echo "File not found: Technical_Documentation/datawarehouse documentation/DW-Stored-Procedures.md"
-          
-          # Copy knime documentation files
-          cp "Technical_Documentation/knime documentation/KNIME_workflows.md" "src/knime%20documentation/" || echo "File not found: Technical_Documentation/knime documentation/KNIME_workflows.md"
-          
-          # Alternative approach using find command with case insensitivity (-iname) and with spaces in paths
-          # This will find files even if case doesn't match exactly
-          echo "Trying alternative approach with find command..."
-          
-          find "Technical_Documentation" -type f -iname "*etl*process*flow*.md" -exec cp {} src/ \; 2>/dev/null || echo "ETL-Process-Flow.md not found with find"
-          find "Technical_Documentation" -type f -iname "*db-system*overview*.md" -exec cp {} src/ \; 2>/dev/null || echo "DB-System-Overview.md not found with find"
-          find "Technical_Documentation" -type f -iname "*dw-system*overview*.md" -exec cp {} src/ \; 2>/dev/null || echo "DW-System-Overview.md not found with find"
-          
-          find "Technical_Documentation" -type f -iname "*db-etl*process*.md" -exec cp {} "src/database%20documentation/" \; 2>/dev/null || echo "DB-ETL-Process.md not found with find"
-          find "Technical_Documentation" -type f -iname "*db-import*setup*.md" -exec cp {} "src/database%20documentation/" \; 2>/dev/null || echo "DB-Import-Setup-Guide.md not found with find"
-          find "Technical_Documentation" -type f -iname "*db-sql*server*.md" -exec cp {} "src/database%20documentation/" \; 2>/dev/null || echo "DB-SQL-Server-Agent-Jobs.md not found with find"
-          find "Technical_Documentation" -type f -iname "*db-schema*.md" -exec cp {} "src/database%20documentation/" \; 2>/dev/null || echo "DB-Schema.md not found with find"
-          find "Technical_Documentation" -type f -iname "*db-stored*procedures*.md" -exec cp {} "src/database%20documentation/" \; 2>/dev/null || echo "DB-Stored-Procedures.md not found with find"
-          
-          find "Technical_Documentation" -type f -iname "*dw-dimension*tables*.md" -exec cp {} "src/datawarehouse%20documentation/" \; 2>/dev/null || echo "DW-Dimension-Tables.md not found with find"
-          find "Technical_Documentation" -type f -iname "*dw-fact*tables*.md" -exec cp {} "src/datawarehouse%20documentation/" \; 2>/dev/null || echo "DW-Fact-Tables.md not found with find"
-          find "Technical_Documentation" -type f -iname "*dw-schema*.md" -exec cp {} "src/datawarehouse%20documentation/" \; 2>/dev/null || echo "DW-Schema.md not found with find"
-          find "Technical_Documentation" -type f -iname "*dw-stored*procedures*.md" -exec cp {} "src/datawarehouse%20documentation/" \; 2>/dev/null || echo "DW-Stored-Procedures.md not found with find"
-          
-          find "Technical_Documentation" -type f -iname "*knime*workflow*.md" -exec cp {} "src/knime%20documentation/" \; 2>/dev/null || echo "KNIME_workflows.md not found with find"
-          find "Technical_Documentation" -type f -iname "*github*actions*.md" -exec cp {} "src/knime%20documentation/Github-Actions-workflows.md" \; 2>/dev/null || echo "Github-Actions-workflows.md not found with find"
-          
-          # Create placeholder files for any missing files
-          for file in ETL-Process-Flow.md DB-System-Overview.md DW-System-Overview.md; do
-            if [ ! -f "src/$file" ]; then
-              echo "# $file\n\nThis documentation is under development." > "src/$file"
-              echo "Created placeholder for $file"
-            fi
-          done
-          
-          for file in DB-ETL-Process.md DB-Import-Setup-Guide.md DB-SQL-Server-Agent-Jobs.md DB-Schema.md DB-Stored-Procedures.md; do
-            if [ ! -f "src/database%20documentation/$file" ]; then
-              echo "# $file\n\nThis documentation is under development." > "src/database%20documentation/$file"
-              echo "Created placeholder for database%20documentation/$file"
-            fi
-          done
-          
-          for file in DW-Dimension-Tables.md DW-Fact-Tables.md DW-Schema.md DW-Stored-Procedures.md; do
-            if [ ! -f "src/datawarehouse%20documentation/$file" ]; then
-              echo "# $file\n\nThis documentation is under development." > "src/datawarehouse%20documentation/$file"
-              echo "Created placeholder for datawarehouse%20documentation/$file"
-            fi
-          done
-          
-          for file in KNIME_workflows.md; do
-            if [ ! -f "src/knime%20documentation/$file" ]; then
-              echo "# $file\n\nThis documentation is under development." > "src/knime%20documentation/$file"
-              echo "Created placeholder for knime%20documentation/$file"
-            fi
-          done
-          
-          if [ ! -f "src/knime%20documentation/Github-Actions-workflows.md" ]; then
-            echo "# Github Actions Workflows\n\nThis documentation is under development." > "src/knime%20documentation/Github-Actions-workflows.md"
-            echo "Created placeholder for knime%20documentation/Github-Actions-workflows.md"
+          # Copy README.md to src directory
+          if [ -f README.md ]; then
+            cp README.md src/
+          else
+            # Create a default README.md if it doesn't exist
+            echo -e "# Technical Documentation\n\nWelcome to the Technical Documentation for the DataCycle Project." > src/README.md
           fi
           
-          # List all files that were copied to src
+          # Create a new SUMMARY.md for src directory that references the correct paths
+          cat > src/SUMMARY.md << 'EOL'
+          # Summary
+          
+          [Introduction](README.md)
+          
+          ## Overview
+          - [ETL Overview](Technical_Documentation/ETL-Process-Flow.md)
+          
+          ## Database Documentation
+          - [DB System Overview](Technical_Documentation/DB-System-Overview.md)
+          - [DB ETL Process](Technical_Documentation/database%20documentation/DB-ETL-Process.md)
+          - [DB Import Setup Guide](Technical_Documentation/database%20documentation/DB-Import-Setup-Guide.md)
+          - [DB SQL Server Agent Jobs](Technical_Documentation/database%20documentation/DB-SQL-Server-Agent-Jobs.md)
+          - [DB Schema](Technical_Documentation/database%20documentation/DB-Schema.md)
+          - [DB Stored Procedures](Technical_Documentation/database%20documentation/DB-Stored-Procedures.md)
+          
+          ## Data Warehouse Documentation
+          - [DW System Overview](Technical_Documentation/DW-System-Overview.md)
+          - [DW Dimension Tables](Technical_Documentation/datawarehouse%20documentation/DW-Dimension-Tables.md)
+          - [DW Fact Tables](Technical_Documentation/datawarehouse%20documentation/DW-Fact-Tables.md)
+          - [DW Schema](Technical_Documentation/datawarehouse%20documentation/DW-Schema.md)
+          - [DW Stored Procedures](Technical_Documentation/datawarehouse%20documentation/DW-Stored-Procedures.md)
+          
+          ## KNIME Documentation
+          - [Knime Workflows](Technical_Documentation/knime%20documentation/KNIME%20workflows.md)
+          
+          ## GitHub Actions
+          - [GitHub Actions Workflows](Technical_Documentation/Github-Actions-workflows.md)
+          EOL
+          
+          # Check and populate empty files with content
+          check_and_populate() {
+            file="$1"
+            title="$2"
+            
+            # Skip if file doesn't exist
+            if [ ! -f "$file" ]; then
+              echo "File not found: $file"
+              return
+            fi
+            
+            # Check if file is empty or very small
+            size=$(wc -c < "$file")
+            if [ $size -lt 10 ]; then
+              echo "File is empty or too small, creating content for: $file"
+              echo -e "# $title\n\nThis documentation is under development." > "$file"
+            fi
+            
+            echo "File content for $file:"
+            head -n 3 "$file"
+          }
+          
+          # Check and populate all files referenced in SUMMARY.md
+          check_and_populate "src/Technical_Documentation/ETL-Process-Flow.md" "ETL Process Flow"
+          check_and_populate "src/Technical_Documentation/DB-System-Overview.md" "Database System Overview"
+          check_and_populate "src/Technical_Documentation/DW-System-Overview.md" "Data Warehouse System Overview"
+          
+          check_and_populate "src/Technical_Documentation/database documentation/DB-ETL-Process.md" "Database ETL Process"
+          check_and_populate "src/Technical_Documentation/database documentation/DB-Import-Setup-Guide.md" "Database Import Setup Guide"
+          check_and_populate "src/Technical_Documentation/database documentation/DB-SQL-Server-Agent-Jobs.md" "Database SQL Server Agent Jobs"
+          check_and_populate "src/Technical_Documentation/database documentation/DB-Schema.md" "Database Schema"
+          check_and_populate "src/Technical_Documentation/database documentation/DB-Stored-Procedures.md" "Database Stored Procedures"
+          
+          check_and_populate "src/Technical_Documentation/datawarehouse documentation/DW-Dimension-Tables.md" "Data Warehouse Dimension Tables"
+          check_and_populate "src/Technical_Documentation/datawarehouse documentation/DW-Fact-Tables.md" "Data Warehouse Fact Tables"
+          check_and_populate "src/Technical_Documentation/datawarehouse documentation/DW-Schema.md" "Data Warehouse Schema"
+          check_and_populate "src/Technical_Documentation/datawarehouse documentation/DW-Stored-Procedures.md" "Data Warehouse Stored Procedures"
+          
+          check_and_populate "src/Technical_Documentation/knime documentation/KNIME workflows.md" "KNIME Workflows"
+          check_and_populate "src/Technical_Documentation/Github-Actions-workflows.md" "GitHub Actions Workflows"
+          
+          # List all files in src directory
           echo "Final src directory structure:"
           find src -type f | sort
       
