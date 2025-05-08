@@ -64,10 +64,6 @@ jobs:
           
           # Copy knime documentation files
           cp Technical_Documentation/knime\ documentation/workflows.md src/knime_documentation/workflows.md
-          cp Technical_Documentation/knime\ documentation/DB-System-Overview.md src/database_documentation/DB-System-Overview.md
-          cp Technical_Documentation/knime\ documentation/DW-System-Overview.md src/datawarehouse_documentation/DW-System-Overview.md
-          cp Technical_Documentation/knime\ documentation/ETL-Process-Flow.md src/knime_documentation/ETL-Process-Flow.md
-          cp Technical_Documentation/knime\ documentation/Github-Actions-workflows.md src/knime_documentation/Github-Actions-workflows.md
           
           done
       
