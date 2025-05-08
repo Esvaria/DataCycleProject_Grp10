@@ -154,13 +154,27 @@ The system is fully automated through:
 ## Analytics
 
 ### KNIME Integration
-
-@Todo Francesco change text
 The data from the Data Warehouse is imported into KNIME workflows for advanced analytics, including:
 
 - Machine performance analysis
 - Predictive algorithms
 - Usage pattern identification
+
+The predictive workflow was developed with KNIME and published on KNIME Server as a REST API service, enabling direct integration with external systems (e.g. Power BI) and inference automation. The architecture adopted separates the data preparation phase from the predictive phase, ensuring modularity and control:
+
+- A separate workflow or SQL script queries the Data Warehouse (DWmachines), processes the data and populates an intermediate table containing the aggregated and filtered data needed for inference. The workflow is also used to test different models and train the chosen one.
+- The workflow published on KNIME Server uses a Container Input (Table) node to receive this input data, reading directly from the generated table.
+- Within the workflow, the data undergoes a preprocessing phase, then is passed to a multiple regression model capable of simulating a Recurrent Neural Network to estimate multiple target values and identify patterns.
+- The model results are passed to a Container Output (Table), allowing:
+
+  - the return of data via API in tabular format,
+  - or writing to a file or output table in the database, accessible by business intelligence tools such as Power BI.
+
+This configuration allows you to:
+
+- perform inferences on always up-to-date data (thanks to the table prepared upstream),
+- call the model via API when needed,
+- easily integrate forecasts into the analytics dashboard.
 
 ### Power BI Dashboard
 
