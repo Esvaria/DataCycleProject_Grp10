@@ -1,0 +1,89 @@
+name: Deploy mdBook site to Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      MDBOOK_VERSION: 0.4.36
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install mdBook
+        run: |
+          curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh -s -- -y
+          source "$HOME/.cargo/env"
+          cargo install mdbook --version ${MDBOOK_VERSION}
+      
+      - name: Setup mdBook structure
+        run: |
+          # Create src directory if it doesn't exist
+          mkdir -p src
+          
+          # Copy README.md to src directory if it exists
+          if [ -f README.md ]; then
+            cp README.md src/
+          else
+            # Create a default README.md if it doesn't exist
+            echo "# Technical Documentation" > src/README.md
+          fi
+          
+          # Copy SUMMARY.md to src directory
+          cp SUMMARY.md src/
+          
+          # Create directories in src
+          mkdir -p src/database_documentation
+          mkdir -p src/datawarehouse_documentation
+          mkdir -p src/knime_documentation
+          
+          # Copy database documentation files
+          cp Technical_Documentation/database\ documentation/DB-ETL-Process.md src/database_documentation/ || echo "File not found: DB-ETL-Process.md"
+          cp Technical_Documentation/database\ documentation/DB-Import-Setup-Guide.md src/database_documentation/ || echo "File not found: DB-Import-Setup-Guide.md"
+          cp Technical_Documentation/database\ documentation/DB-SQL-Server-Agent-Jobs.md src/database_documentation/ || echo "File not found: DB-SQL-Server-Agent-Jobs.md"
+          cp Technical_Documentation/database\ documentation/DB-Schema.md src/database_documentation/ || echo "File not found: DB-Schema.md"
+          cp Technical_Documentation/database\ documentation/DB-Stored-Procedures.md src/database_documentation/ || echo "File not found: DB-Stored-Procedures.md"
+          
+          # Copy datawarehouse documentation files
+          cp Technical_Documentation/datawarehouse\ documentation/DW-Dimension-Tables.md src/datawarehouse_documentation/ || echo "File not found: DW-Dimension-Tables.md"
+          cp Technical_Documentation/datawarehouse\ documentation/DW-Fact-Tables.md src/datawarehouse_documentation/ || echo "File not found: DW-Fact-Tables.md"
+          cp Technical_Documentation/datawarehouse\ documentation/DW-Schema.md src/datawarehouse_documentation/ || echo "File not found: DW-Schema.md"
+          cp Technical_Documentation/datawarehouse\ documentation/DW-Stored-Procedures.md src/datawarehouse_documentation/ || echo "File not found: DW-Stored-Procedures.md"
+          
+          # Copy knime documentation files
+          cp Technical_Documentation/knime\ documentation/workflows.md src/knime_documentation/ || echo "File not found: workflows.md"
+      
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+      
+      - name: Build with mdBook
+        run: mdbook build
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./book
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
