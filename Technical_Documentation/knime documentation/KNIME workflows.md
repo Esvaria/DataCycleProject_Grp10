@@ -31,7 +31,7 @@ The data we had already collected was cleaned up by removing anything that wasn'
 The models tested by performing different variations of the parameters and time series were:
 
 1. Linear Regression
-2. 
+2. Simple Regression Tree
 3. Random Forest Regressor
 4. RProp MLP
 
