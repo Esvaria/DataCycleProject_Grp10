@@ -1,0 +1,14 @@
+[book]
+title = "Technical Documentation"
+authors = ["Esvaria"]
+description = "Technical documentation for database, data warehouse, and KNIME workflows"
+src = "src"
+language = "en"
+
+[output.html]
+git-repository-url = "https://github.com/Esvaria/DataCycleProject_Grp10"
+edit-url-template = "https://github.com/Esvaria/DataCycleProject_Grp10/edit/main/{path}"
+site-url = "/DataCycleProject_Grp10/"
+
+[build]
+build-dir = "book"
