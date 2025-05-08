@@ -104,10 +104,10 @@ from smbprotocol.file_info import FileInformationClass
 from smbprotocol.open import ImpersonationLevel, CreateDisposition, CreateOptions, ShareAccess, FileAttributes
 
 # Configuration SMB
-SMB_SERVER = "10.130.25.152"
-SMB_SHARE = "Eversys"
-SMB_USER = "Student"
-SMB_PASSWORD = "3uw.AQ!SWxsDBm2zi3"
+SMB_SERVER = ""
+SMB_SHARE = ""
+SMB_USER = ""
+SMB_PASSWORD = ""
 
 # Local folder to save DAT files (placed one level up from the script directory)
 BASE_DIR = os.path.abspath(os.path.join(os.getcwd(), ".."))
