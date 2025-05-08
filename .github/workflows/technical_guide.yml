@@ -1,19 +1,15 @@
 name: Deploy mdBook site to Pages
-
 on:
   push:
     branches: ["main"]
   workflow_dispatch:
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
   group: "pages"
   cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -49,6 +45,11 @@ jobs:
           mkdir -p src/datawarehouse_documentation
           mkdir -p src/knime_documentation
           
+          # Copy overview files
+          cp ETL-process-flow.md src/ || echo "File not found: ETL-process-flow.md"
+          cp DB-System-Overview.md src/ || echo "File not found: DB-System-Overview.md"
+          cp DW-System-Overview.md src/ || echo "File not found: DW-System-Overview.md"
+          
           # Copy database documentation files
           cp Technical_Documentation/database\ documentation/DB-ETL-Process.md src/database_documentation/ || echo "File not found: DB-ETL-Process.md"
           cp Technical_Documentation/database\ documentation/DB-Import-Setup-Guide.md src/database_documentation/ || echo "File not found: DB-Import-Setup-Guide.md"
@@ -64,6 +65,10 @@ jobs:
           
           # Copy knime documentation files
           cp Technical_Documentation/knime\ documentation/workflows.md src/knime_documentation/ || echo "File not found: workflows.md"
+          
+          # Copy GitHub Actions documentation
+          mkdir -p src/github_actions
+          cp Github-Actions-workflows.md src/github_actions/ || echo "File not found: Github-Actions-workflows.md"
       
       - name: Setup Pages
         id: pages
@@ -76,7 +81,6 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./book
-
   deploy:
     environment:
       name: github-pages
