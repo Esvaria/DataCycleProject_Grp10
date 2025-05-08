@@ -21,7 +21,7 @@
 - [Stored Procedures](datawarehouse_documentation/DW-Stored-Procedures.md)
 
 ## KNIME Documentation
-- [Workflows](knime_documentation/workflows.md)
+- [Knime Workflows](knime_documentation/KNIME_workflows.md)
 
 ## GitHub Actions
 - [GitHub Actions Workflows](knime_documentation/Github-Actions-workflows.md)
